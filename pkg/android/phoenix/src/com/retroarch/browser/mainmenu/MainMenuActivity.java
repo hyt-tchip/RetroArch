@@ -93,6 +93,10 @@ public final class MainMenuActivity extends PreferenceActivity
 
 									Log.i("MainMenuActivity", "User accepted request for external storage permissions.");
 								}
+								else
+								{
+									finish();
+								}
 							}
 						});
 				}
@@ -128,14 +132,19 @@ public final class MainMenuActivity extends PreferenceActivity
 
 		retro.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
 
-		startRetroActivity(
-				retro,
-				null,
-				prefs.getString("libretro_path", getApplicationInfo().dataDir + "/cores/"),
-				UserPreferences.getDefaultConfigPath(this),
-				Settings.Secure.getString(getContentResolver(), Settings.Secure.DEFAULT_INPUT_METHOD),
-				getApplicationInfo().dataDir,
-				getApplicationInfo().sourceDir);
+		Bundle data = getIntent().getExtras();
+		if (data != null) {
+			retro.putExtras(data);
+		} else {
+			startRetroActivity(
+					retro,
+					null,
+					prefs.getString("libretro_path", getApplicationInfo().dataDir + "/cores/"),
+					UserPreferences.getDefaultConfigPath(this),
+					Settings.Secure.getString(getContentResolver(), Settings.Secure.DEFAULT_INPUT_METHOD),
+					getApplicationInfo().dataDir,
+					getApplicationInfo().sourceDir);
+		}
 		startActivity(retro);
 		finish();
 	}
