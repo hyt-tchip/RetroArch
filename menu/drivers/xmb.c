@@ -61,6 +61,8 @@
 
 #include "../../tasks/tasks_internal.h"
 
+#include "../../cheevos/badges.h"
+
 #define XMB_RIBBON_ROWS 64
 #define XMB_RIBBON_COLS 64
 #define XMB_RIBBON_VERTICES 2*XMB_RIBBON_COLS*XMB_RIBBON_ROWS-2*XMB_RIBBON_COLS
@@ -382,6 +384,8 @@ const char* xmb_theme_ident(void)
          return "flatui";
       case XMB_ICON_THEME_RETROACTIVE:
          return "retroactive";
+      case XMB_ICON_THEME_RETROSYSTEM:
+         return "retrosystem";
       case XMB_ICON_THEME_PIXEL:
          return "pixel";
       case XMB_ICON_THEME_NEOACTIVE:
@@ -2237,6 +2241,18 @@ static uintptr_t xmb_icon_get_id(xmb_handle_t *xmb,
 #endif
    }
 
+#ifdef HAVE_CHEEVOS
+  if ((type >= MENU_SETTINGS_CHEEVOS_START) &&
+    (type < MENU_SETTINGS_NETPLAY_ROOMS_START))
+    {
+      int new_id = type - MENU_SETTINGS_CHEEVOS_START;
+      if ( get_badge_texture(new_id) != 0 )
+        return get_badge_texture( new_id );
+      else
+        return xmb->textures.list[XMB_TEXTURE_SUBSETTING]; // Should be replaced with placeholder badge icon.
+    }
+#endif
+
    return xmb->textures.list[XMB_TEXTURE_SUBSETTING];
 }
 
@@ -3130,10 +3146,12 @@ static void xmb_frame(void *data, video_frame_info_t *video_info)
             width,
             height);
 
-   font_driver_flush(video_info->width, video_info->height, xmb->font);
+   font_driver_flush(video_info->width, video_info->height, xmb->font,
+         video_info);
    font_driver_bind_block(xmb->font, NULL);
 
-   font_driver_flush(video_info->width, video_info->height, xmb->font2);
+   font_driver_flush(video_info->width, video_info->height, xmb->font2,
+         video_info);
    font_driver_bind_block(xmb->font2, NULL);
 
    if (menu_input_dialog_get_display_kb())
