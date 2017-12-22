@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="exit_game">Exit Game</string>
+    <string name="game_menu">Menu</string>
+</resources>
