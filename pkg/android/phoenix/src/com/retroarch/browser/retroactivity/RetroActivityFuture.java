@@ -1,5 +1,9 @@
 package com.retroarch.browser.retroactivity;
 
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.content.Intent;
@@ -7,6 +11,8 @@ import android.content.Context;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import android.hardware.input.InputManager;
+
+import com.retroarch.R;
 
 public final class RetroActivityFuture extends RetroActivityCamera {
 
@@ -80,5 +86,36 @@ public final class RetroActivityFuture extends RetroActivityCamera {
 
 		// If QUITFOCUS parameter was set then completely exit Retroarch when focus is lost
 		if (quitfocus) System.exit(0);
+	}
+
+	@Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+    	super.onKeyDown(keyCode, event);
+    	
+    	if ((keyCode == event.KEYCODE_BUTTON_START && event.isLongPress()) ||
+                keyCode == event.KEYCODE_MENU) {
+    		showMenu();
+    	}
+
+		return true;
+	}
+
+	private void showMenu() {
+		AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.game_menu)
+                .setItems(R.array.retro_menu, new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        switch (which) {
+                            case 0:
+                                System.exit(0);
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                })
+                .create();
+        dialog.show();
 	}
 }

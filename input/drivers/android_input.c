@@ -820,7 +820,8 @@ static INLINE void android_input_poll_event_type_key(
          break;
    }
 
-   if ((keycode == AKEYCODE_VOLUME_UP || keycode == AKEYCODE_VOLUME_DOWN))
+   if ((keycode == AKEYCODE_VOLUME_UP || keycode == AKEYCODE_VOLUME_DOWN || 
+         keycode == AKEYCODE_BUTTON_START || keycode == AKEYCODE_MENU))
       *handled = 0;
 }
 
@@ -1199,7 +1200,7 @@ static void android_input_poll_input(void *data)
          if (port < 0 && !is_keyboard_id(id))
             handle_hotplug(android, android_app,
             &port, id, source);
- 
+
          switch (type_event)
          {
             case AINPUT_EVENT_TYPE_MOTION:
