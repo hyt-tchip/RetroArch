@@ -119,10 +119,16 @@ endif
 
 RARCH_OBJ := $(addprefix $(OBJDIR)/,$(OBJ))
 
+ifneq ($(X86),)
+   CFLAGS += -m32
+   CXXLAGS += -m32
+   LDFLAGS += -m32
+endif
+
 ifneq ($(SANITIZER),)
-    CFLAGS   := -fsanitize=$(SANITIZER) $(CFLAGS)
-    CXXFLAGS := -fsanitize=$(SANITIZER) $(CXXFLAGS)
-    LDFLAGS  := -fsanitize=$(SANITIZER) $(LDFLAGS)
+   CFLAGS   := -fsanitize=$(SANITIZER) $(CFLAGS)
+   CXXFLAGS := -fsanitize=$(SANITIZER) $(CXXFLAGS)
+   LDFLAGS  := -fsanitize=$(SANITIZER) $(LDFLAGS)
 endif
 
 ifneq ($(findstring $(GPERFTOOLS),profiler),)
@@ -199,13 +205,6 @@ install: $(TARGET)
 		mkdir -p $(DESTDIR)$(ASSETS_DIR)/retroarch/assets/glui; \
 		cp -r media/assets/xmb/  $(DESTDIR)$(ASSETS_DIR)/retroarch/assets; \
 		cp -r media/assets/glui/ $(DESTDIR)$(ASSETS_DIR)/retroarch/assets; \
-		echo "Removing unneeded source image files.."; \
-		rm -rf $(DESTDIR)$(ASSETS_DIR)/retroarch/assets/xmb/flatui/src; \
-		rm -rf $(DESTDIR)$(ASSETS_DIR)/retroarch/assets/xmb/monochrome/src; \
-		rm -rf $(DESTDIR)$(ASSETS_DIR)/retroarch/assets/xmb/retroactive/src; \
-		rm -rf $(DESTDIR)$(ASSETS_DIR)/retroarch/assets/xmb/neoactive/src; \
-		rm -rf $(DESTDIR)$(ASSETS_DIR)/retroarch/assets/xmb/retrosystem/src; \
-		rm -rf $(DESTDIR)$(ASSETS_DIR)/retroarch/assets/xmb/dot-art/src; \
 		echo "Asset copying done."; \
 	fi
 

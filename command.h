@@ -2,7 +2,7 @@
  *  Copyright (C) 2010-2014 - Hans-Kristian Arntzen
  *  Copyright (C) 2011-2016 - Daniel De Matteis
  *  Copyright (C) 2016 - Brad Parker
- * 
+ *
  *  RetroArch is free software: you can redistribute it and/or modify it under the terms
  *  of the GNU General Public License as published by the Free Software Found-
  *  ation, either version 3 of the License, or (at your option) any later version.
@@ -60,6 +60,8 @@ enum event_command
    CMD_EVENT_TAKE_SCREENSHOT,
    /* Quits RetroArch. */
    CMD_EVENT_QUIT,
+   /* Reinitialize all drivers. */
+   CMD_EVENT_REINIT_FROM_TOGGLE,
    /* Reinitialize all drivers. */
    CMD_EVENT_REINIT,
    /* Toggles cheevos hardcore mode. */
@@ -258,6 +260,20 @@ bool command_free(command_t *handle);
  * Returns: true (1) on success, otherwise false (0).
  **/
 bool command_event(enum event_command action, void *data);
+
+void command_playlist_push_write(
+      void *data,
+      const char *path,
+      const char *label,
+      const char *core_path,
+      const char *core_name);
+
+void command_playlist_update_write(
+      void *data,
+      size_t idx,
+      const char *core_display_name,
+      const char *label,
+      const char *path);
 
 RETRO_END_DECLS
 

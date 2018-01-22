@@ -24,6 +24,7 @@
 #include <file/file_path.h>
 #include <lists/dir_list.h>
 #include <string/stdstring.h>
+#include <streams/file_stream.h>
 #include <streams/stdin_stream.h>
 
 #ifdef HAVE_CONFIG_H
@@ -610,7 +611,7 @@ static void command_stdin_poll(command_t *handle)
    handle->stdin_buf_ptr                    += ret;
    handle->stdin_buf[handle->stdin_buf_ptr]  = '\0';
 
-   last_newline                              = 
+   last_newline                              =
       strrchr(handle->stdin_buf, '\n');
 
    if (!last_newline)
@@ -1028,7 +1029,7 @@ static void command_event_init_controllers(void)
             break;
          case RETRO_DEVICE_JOYPAD:
             /* Ideally these checks shouldn't be required but if we always
-             * call core_set_controller_port_device input won't work on 
+             * call core_set_controller_port_device input won't work on
              * cores that don't set port information properly */
             if (info && info->ports.size != 0 && i < info->ports.size)
                set_controller = true;
@@ -1102,7 +1103,7 @@ static void command_event_load_auto_state(void)
 #endif
 
 #ifdef HAVE_CHEEVOS
-   if (settings->bools.cheevos_hardcore_mode_enable)
+   if (cheevos_loaded && settings->bools.cheevos_hardcore_mode_enable)
       goto error;
 #endif
 
@@ -1114,7 +1115,7 @@ static void command_event_load_auto_state(void)
             file_path_str(FILE_PATH_AUTO_EXTENSION),
             savestate_name_auto_size);
 
-   if (!path_file_exists(savestate_name_auto))
+   if (!filestream_exists(savestate_name_auto))
       goto error;
 
    ret = content_load_state(savestate_name_auto, false, true);
@@ -1126,7 +1127,7 @@ static void command_event_load_auto_state(void)
          msg_hash_to_str(MSG_AUTOLOADING_SAVESTATE_FROM),
          savestate_name_auto, ret ? "succeeded" : "failed");
    RARCH_LOG("%s\n", msg);
-   
+
    free(savestate_name_auto);
 
    return;
@@ -1308,14 +1309,18 @@ static void command_event_restore_default_shader_preset(void)
    if (!path_is_empty(RARCH_PATH_DEFAULT_SHADER_PRESET))
    {
       /* auto shader preset: reload the original shader */
-      settings_t *settings = config_get_ptr();
+      settings_t *settings      = config_get_ptr();
+      const char *shader_preset = path_get(RARCH_PATH_DEFAULT_SHADER_PRESET);
 
-      RARCH_LOG("%s %s\n",
-            msg_hash_to_str(MSG_RESTORING_DEFAULT_SHADER_PRESET_TO),
-            path_get(RARCH_PATH_DEFAULT_SHADER_PRESET));
-      strlcpy(settings->paths.path_shader,
-            path_get(RARCH_PATH_DEFAULT_SHADER_PRESET),
-            sizeof(settings->paths.path_shader));
+      if (!string_is_empty(shader_preset))
+      {
+         RARCH_LOG("%s %s\n",
+               msg_hash_to_str(MSG_RESTORING_DEFAULT_SHADER_PRESET_TO),
+               shader_preset);
+         strlcpy(settings->paths.path_shader,
+               shader_preset,
+               sizeof(settings->paths.path_shader));
+      }
    }
 
    path_clear(RARCH_PATH_DEFAULT_SHADER_PRESET);
@@ -1334,7 +1339,7 @@ static bool command_event_save_auto_state(void)
    bool is_inited              = false;
    char *savestate_name_auto   = (char*)
       calloc(PATH_MAX_LENGTH, sizeof(*savestate_name_auto));
-   size_t 
+   size_t
       savestate_name_auto_size = PATH_MAX_LENGTH * sizeof(char);
    settings_t *settings        = config_get_ptr();
    global_t   *global          = global_get_ptr();
@@ -1352,7 +1357,7 @@ static bool command_event_save_auto_state(void)
       goto error;
 
 #ifdef HAVE_CHEEVOS
-   if (settings->bools.cheevos_hardcore_mode_enable)
+   if (cheevos_loaded && settings->bools.cheevos_hardcore_mode_enable)
       goto error;
 #endif
 
@@ -1374,24 +1379,32 @@ error:
    return false;
 }
 
-static bool command_event_save_config(const char *config_path,
+static bool command_event_save_config(
+      const char *config_path,
       char *s, size_t len)
 {
-   if (string_is_empty(config_path) || !config_save_file(config_path))
+   bool path_exists = !string_is_empty(config_path);
+   const char *str  = path_exists ? config_path :
+      path_get(RARCH_PATH_CONFIG);
+
+   if (path_exists && config_save_file(config_path))
+   {
+      snprintf(s, len, "[Config]: %s \"%s\".",
+            msg_hash_to_str(MSG_SAVED_NEW_CONFIG_TO),
+            config_path);
+      RARCH_LOG("%s\n", s);
+      return true;
+   }
+
+   if (!string_is_empty(str))
    {
       snprintf(s, len, "%s \"%s\".",
             msg_hash_to_str(MSG_FAILED_SAVING_CONFIG_TO),
-            path_get(RARCH_PATH_CONFIG));
+            str);
       RARCH_ERR("%s\n", s);
-
-      return false;
    }
 
-   snprintf(s, len, "[Config]: %s \"%s\".",
-         msg_hash_to_str(MSG_SAVED_NEW_CONFIG_TO),
-         path_get(RARCH_PATH_CONFIG));
-   RARCH_LOG("%s\n", s);
-   return true;
+   return false;
 }
 
 /**
@@ -1408,6 +1421,7 @@ static bool command_event_save_core_config(void)
    bool ret                        = false;
    bool found_path                 = false;
    bool overrides_active           = false;
+   const char *core_path           = NULL;
    char *config_dir                = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
    char *config_name               = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
    char *config_path               = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
@@ -1430,8 +1444,10 @@ static bool command_event_save_core_config(void)
       goto error;
    }
 
+   core_path = path_get(RARCH_PATH_CORE);
+
    /* Infer file name based on libretro core. */
-   if (!string_is_empty(path_get(RARCH_PATH_CORE)) && path_file_exists(path_get(RARCH_PATH_CORE)))
+   if (!string_is_empty(core_path) && filestream_exists(core_path))
    {
       unsigned i;
       RARCH_LOG("%s\n", msg_hash_to_str(MSG_USING_CORE_NAME_FOR_NEW_CONFIG));
@@ -1443,7 +1459,7 @@ static bool command_event_save_core_config(void)
 
          fill_pathname_base_noext(
                config_name,
-               path_get(RARCH_PATH_CORE),
+               core_path,
                config_size);
 
          fill_pathname_join(config_path, config_dir, config_name,
@@ -1459,7 +1475,7 @@ static bool command_event_save_core_config(void)
                   sizeof(tmp));
 
          strlcat(config_path, tmp, config_size);
-         if (!path_file_exists(config_path))
+         if (!filestream_exists(config_path))
          {
             found_path = true;
             break;
@@ -1490,7 +1506,8 @@ static bool command_event_save_core_config(void)
 
    command_event_save_config(config_path, msg, sizeof(msg));
 
-   runloop_msg_queue_push(msg, 1, 180, true);
+   if (!string_is_empty(msg))
+      runloop_msg_queue_push(msg, 1, 180, true);
 
    if (overrides_active)
       rarch_ctl(RARCH_CTL_SET_OVERRIDES_ACTIVE, NULL);
@@ -1686,6 +1703,62 @@ static bool command_event_resize_windowed_scale(void)
    return true;
 }
 
+void command_playlist_push_write(
+      void *data,
+      const char *path,
+      const char *label,
+      const char *core_path,
+      const char *core_name)
+{
+   playlist_t *playlist = (playlist_t*)data;
+
+   if (!playlist)
+      return;
+
+   if (playlist_push(
+         playlist,
+         path,
+         label,
+         core_path,
+         core_name,
+         NULL,
+         NULL
+         ))
+      playlist_write_file(playlist);
+}
+
+void command_playlist_update_write(
+      void *data,
+      size_t idx,
+      const char *core_display_name,
+      const char *label,
+      const char *path)
+{
+   playlist_t *plist    = (playlist_t*)data;
+   playlist_t *playlist = NULL;
+
+   if (plist)
+      playlist          = plist;
+#ifdef HAVE_MENU
+   else
+      menu_driver_ctl(RARCH_MENU_CTL_PLAYLIST_GET, &playlist);
+#endif
+   if (!playlist)
+      return;
+
+   playlist_update(
+         playlist,
+         idx,
+         label,
+         NULL,
+         path,
+         core_display_name,
+         NULL,
+         NULL);
+
+   playlist_write_file(playlist);
+}
+
 /**
  * command_event:
  * @cmd                  : Event command index.
@@ -1734,18 +1807,23 @@ bool command_event(enum event_command cmd, void *data)
          {
 #ifdef HAVE_MENU
             core_info_ctx_find_t info_find;
-            rarch_system_info_t *system_info = runloop_get_system_info();
-            struct retro_system_info *system = &system_info->info;
+            rarch_system_info_t *system_info = NULL;
+            struct retro_system_info *system = NULL;
+            const char *core_path            = NULL;
+            system_info                      = runloop_get_system_info();
+            system                           = &system_info->info;
+            core_path                        = path_get(RARCH_PATH_CORE);
 
 #if defined(HAVE_DYNAMIC)
-            if (string_is_empty(path_get(RARCH_PATH_CORE)))
+            if (string_is_empty(core_path))
                return false;
 #endif
+
             libretro_get_system_info(
-                  path_get(RARCH_PATH_CORE),
+                  core_path,
                   system,
                   &system_info->load_no_content);
-            info_find.path = path_get(RARCH_PATH_CORE);
+            info_find.path = core_path;
 
             if (!core_info_load(&info_find))
             {
@@ -1771,7 +1849,7 @@ bool command_event(enum event_command cmd, void *data)
 #ifdef HAVE_CHEEVOS
          {
             settings_t *settings      = config_get_ptr();
-            if (settings->bools.cheevos_hardcore_mode_enable)
+            if (cheevos_loaded && settings->bools.cheevos_hardcore_mode_enable)
                return false;
          }
 #endif
@@ -1813,7 +1891,7 @@ bool command_event(enum event_command cmd, void *data)
          {
             settings_t *settings      = config_get_ptr();
 #ifdef HAVE_CHEEVOS
-            if (settings->bools.cheevos_hardcore_mode_enable)
+            if (cheevos_loaded && settings->bools.cheevos_hardcore_mode_enable)
                return false;
 #endif
 
@@ -1879,6 +1957,10 @@ bool command_event(enum event_command cmd, void *data)
          cheevos_toggle_hardcore_mode();
 #endif
          break;
+      /* this fallthrough is on purpose, it should do 
+         a CMD_EVENT_REINIT too */
+      case CMD_EVENT_REINIT_FROM_TOGGLE:
+         retroarch_unset_forced_fullscreen();
       case CMD_EVENT_REINIT:
          video_driver_reinit();
          /* Poll input to avoid possibly stale data to corrupt things. */
@@ -1904,7 +1986,7 @@ bool command_event(enum event_command cmd, void *data)
          {
 #ifdef HAVE_CHEEVOS
             settings_t *settings      = config_get_ptr();
-            if (settings->bools.cheevos_hardcore_mode_enable)
+            if (cheevos_loaded && settings->bools.cheevos_hardcore_mode_enable)
                return false;
 #endif
 
@@ -1915,7 +1997,7 @@ bool command_event(enum event_command cmd, void *data)
          {
             settings_t *settings      = config_get_ptr();
 #ifdef HAVE_CHEEVOS
-            if (settings->bools.cheevos_hardcore_mode_enable)
+            if (cheevos_loaded && settings->bools.cheevos_hardcore_mode_enable)
                return false;
 #endif
             if (settings->bools.rewind_enable)
@@ -2254,16 +2336,13 @@ TODO: Add a setting for these tweaks */
          if (!string_is_empty(global->name.label))
             label = global->name.label;
 
-         playlist_push(
+         command_playlist_push_write(
                g_defaults.content_favorites,
                (const char*)data,
                label,
                core_path,
-               core_name,
-               NULL,
-               NULL
+               core_name
                );
-         playlist_write_file(g_defaults.content_favorites);
          runloop_msg_queue_push(msg_hash_to_str(MSG_ADDED_TO_FAVORITES), 1, 180, true);
          break;
       }
@@ -2492,15 +2571,21 @@ TODO: Add a setting for these tweaks */
       case CMD_EVENT_FULLSCREEN_TOGGLE:
          {
             settings_t *settings      = config_get_ptr();
-            bool new_fullscreen_state = !settings->bools.video_fullscreen;
+            bool new_fullscreen_state = !settings->bools.video_fullscreen 
+               && !retroarch_is_forced_fullscreen();
             if (!video_driver_has_windowed())
                return false;
 
-            /* If we go fullscreen we drop all drivers and
-             * reinitialize to be safe. */
+            /* we toggled manually, write the new value to settings */
             configuration_set_bool(settings, settings->bools.video_fullscreen,
                   new_fullscreen_state);
 
+            /* we toggled manually, the cli arg is irrelevant now */
+            if (retroarch_is_forced_fullscreen())
+               retroarch_unset_forced_fullscreen();
+
+            /* If we go fullscreen we drop all drivers and
+             * reinitialize to be safe. */
             command_event(CMD_EVENT_REINIT, NULL);
             if (settings->bools.video_fullscreen)
                video_driver_hide_mouse();

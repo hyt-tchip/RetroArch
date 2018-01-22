@@ -84,6 +84,7 @@ int32_t pad_connection_pad_init(joypad_connection_t *joyconn,
       { "Wii U GC Controller Adapter", 1406,  823,    &pad_connection_wiiugca },
       { "PS2/PSX Controller Adapter",  2064,  1,      &pad_connection_ps2adapter },
       { "PSX to PS3 Controller Adapter", 2064, 3,     &pad_connection_psxadapter },
+      { "Mayflash DolphinBar",         1406,  774,    &pad_connection_wii },
       { 0, 0}
    };
    joypad_connection_t *s = NULL;
@@ -103,7 +104,7 @@ int32_t pad_connection_pad_init(joypad_connection_t *joyconn,
          const char *name_match = strstr(pad_map[i].name, name);
 
          /* Never change, Nintendo. */
-         if(pad_map[i].vid == 1406 && pad_map[i].pid == 816)  
+         if(pad_map[i].vid == 1406 && pad_map[i].pid == 816)
          {
             if(!string_is_equal(pad_map[i].name, name))
                continue;
@@ -133,7 +134,7 @@ int32_t pad_connection_pad_init(joypad_connection_t *joyconn,
          }
       }
 
-      /* We failed to find a matching pad, 
+      /* We failed to find a matching pad,
        * set up one without an interface */
       if (!s->connected)
       {
@@ -173,11 +174,12 @@ void pad_connection_packet(joypad_connection_t *joyconn, uint32_t pad,
       joyconn->iface->packet_handler(joyconn->data, data, length);
 }
 
-uint64_t pad_connection_get_buttons(joypad_connection_t *joyconn, unsigned pad)
+void pad_connection_get_buttons(joypad_connection_t *joyconn, unsigned pad, retro_bits_t* state)
 {
-   if (!joyconn->iface)
-      return 0;
-   return joyconn->iface->get_buttons(joyconn->data);
+	if (joyconn->iface)
+		joyconn->iface->get_buttons(joyconn->data, state);
+   else
+		BIT256_CLEAR_ALL_PTR( state );
 }
 
 int16_t pad_connection_get_axis(joypad_connection_t *joyconn,
@@ -190,8 +192,8 @@ int16_t pad_connection_get_axis(joypad_connection_t *joyconn,
 
 bool pad_connection_has_interface(joypad_connection_t *joyconn, unsigned pad)
 {
-   if (     joyconn && pad < MAX_USERS 
-         && joyconn[pad].connected 
+   if (     joyconn && pad < MAX_USERS
+         && joyconn[pad].connected
          && joyconn[pad].iface)
       return true;
    return false;

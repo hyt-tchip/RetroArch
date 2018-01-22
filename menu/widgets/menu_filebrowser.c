@@ -194,7 +194,7 @@ void filebrowser_parse(void *data, unsigned type_data)
 
          if (!is_dir && path_is_media_type(path) == RARCH_CONTENT_MUSIC)
             file_type = FILE_TYPE_MUSIC;
-         else if (!is_dir && 
+         else if (!is_dir &&
                (settings->bools.multimedia_builtin_mediaplayer_enable ||
                 settings->bools.multimedia_builtin_imageviewer_enable))
          {
@@ -274,9 +274,10 @@ void filebrowser_parse(void *data, unsigned type_data)
    }
 
 end:
-   menu_entries_prepend(info->list,
-         msg_hash_to_str(MENU_ENUM_LABEL_VALUE_PARENT_DIRECTORY),
-         path,
-         MENU_ENUM_LABEL_PARENT_DIRECTORY,
-         FILE_TYPE_PARENT_DIRECTORY, 0, 0);
+   if (info)
+      menu_entries_prepend(info->list,
+            msg_hash_to_str(MENU_ENUM_LABEL_VALUE_PARENT_DIRECTORY),
+            path,
+            MENU_ENUM_LABEL_PARENT_DIRECTORY,
+            FILE_TYPE_PARENT_DIRECTORY, 0, 0);
 }

@@ -115,6 +115,11 @@ static const unsigned window_y = 0;
 static const unsigned fullscreen_x = 0;
 static const unsigned fullscreen_y = 0;
 
+/* Amount of transparency to use for the main window.
+ * 1 is the most transparent while 100 is opaque.
+ */
+static const unsigned window_opacity = 100;
+
 #if defined(RARCH_CONSOLE) || defined(__APPLE__)
 static const bool load_dummy_on_core_shutdown = false;
 #else
@@ -292,6 +297,8 @@ static bool xmb_show_history     = true;
 static bool xmb_show_add     	 = true;
 #endif
 #endif
+
+static bool automatically_add_content_to_playlist = false;
 
 static float menu_framebuffer_opacity = 0.900;
 
@@ -656,11 +663,9 @@ static char buildbot_server_url[] = "http://buildbot.libretro.com/nightly/window
 static char buildbot_server_url[] = "http://buildbot.libretro.com/nightly/windows-msvc2010/x86/latest/";
 #endif
 #elif _MSC_VER == 1400
-#if defined(__x86_64__)
-static char buildbot_server_url[] = "http://buildbot.libretro.com/nightly/windows-msvc2005/x86_64/latest/";
-#elif defined(__i386__) || defined(__i486__) || defined(__i686__) || defined(_M_IX86) || defined(_M_IA64)
 static char buildbot_server_url[] = "http://buildbot.libretro.com/nightly/windows-msvc2005/x86/latest/";
-#endif
+#elif _MSC_VER == 1310
+static char buildbot_server_url[] = "http://buildbot.libretro.com/nightly/windows-msvc2003/x86/latest/";
 #else
 #if defined(__x86_64__)
 static char buildbot_server_url[] = "http://buildbot.libretro.com/nightly/windows/x86_64/latest/";
@@ -680,6 +685,12 @@ static char buildbot_server_url[] = "";
 #endif
 #elif defined(WIIU)
 static char buildbot_server_url[] = "http://buildbot.libretro.com/nightly/nintendo/wiiu/latest/";
+#elif defined(__CELLOS_LV2__) && defined(DEX_BUILD)
+static char buildbot_server_url[] = "http://buildbot.libretro.com/nightly/playstation/ps3/latest/dex-ps3/";
+#elif defined(__CELLOS_LV2__) && defined(CEX_BUILD)
+static char buildbot_server_url[] = "http://buildbot.libretro.com/nightly/playstation/ps3/latest/cex-ps3/";
+#elif defined(__CELLOS_LV2__) && defined(ODE_BUILD)
+static char buildbot_server_url[] = "http://buildbot.libretro.com/nightly/playstation/ps3/latest/ode-ps3/";
 #else
 static char buildbot_server_url[] = "";
 #endif

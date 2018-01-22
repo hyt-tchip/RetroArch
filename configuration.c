@@ -19,6 +19,7 @@
 
 #include <ctype.h>
 
+#include <libretro.h>
 #include <file/config_file.h>
 #include <file/file_path.h>
 #include <compat/strl.h>
@@ -1114,6 +1115,7 @@ static struct config_bool_setting *populate_settings_bool(settings_t *settings, 
    unsigned count                      = 0;
    global_t   *global                  = global_get_ptr();
 
+   SETTING_BOOL("automatically_add_content_to_playlist", &settings->bools.automatically_add_content_to_playlist, true, automatically_add_content_to_playlist, false);
    SETTING_BOOL("ui_companion_start_on_boot",    &settings->bools.ui_companion_start_on_boot, true, ui_companion_start_on_boot, false);
    SETTING_BOOL("ui_companion_enable",           &settings->bools.ui_companion_enable, true, ui_companion_enable, false);
    SETTING_BOOL("video_gpu_record",              &settings->bools.video_gpu_record, true, gpu_record, false);
@@ -1255,6 +1257,9 @@ static struct config_bool_setting *populate_settings_bool(settings_t *settings, 
    SETTING_BOOL("cheevos_test_unofficial",      &settings->bools.cheevos_test_unofficial, true, false, false);
    SETTING_BOOL("cheevos_hardcore_mode_enable", &settings->bools.cheevos_hardcore_mode_enable, true, false, false);
    SETTING_BOOL("cheevos_leaderboards_enable",  &settings->bools.cheevos_leaderboards_enable, true, false, false);
+#ifdef HAVE_XMB
+   SETTING_BOOL("cheevos_badges_enable",        &settings->bools.cheevos_badges_enable, true, false, false);
+#endif
    SETTING_BOOL("cheevos_verbose_enable",       &settings->bools.cheevos_verbose_enable, true, false, false);
 #endif
 #ifdef HAVE_OVERLAY
@@ -1373,6 +1378,7 @@ static struct config_uint_setting *populate_settings_uint(settings_t *settings, 
    SETTING_UINT("video_fullscreen_y",           &settings->uints.video_fullscreen_y,  true, fullscreen_y, false);
    SETTING_UINT("video_window_x",               &settings->uints.video_window_x,  true, fullscreen_x, false);
    SETTING_UINT("video_window_y",               &settings->uints.video_window_y,  true, fullscreen_y, false);
+   SETTING_UINT("video_window_opacity",         &settings->uints.video_window_opacity, true, window_opacity, false);
 #ifdef HAVE_COMMAND
    SETTING_UINT("network_cmd_port",             &settings->uints.network_cmd_port,    true, network_cmd_port, false);
 #endif
@@ -1572,11 +1578,6 @@ static void config_set_defaults(void)
 #endif
    settings->floats.video_scale                = scale;
 
-   if (retroarch_is_forced_fullscreen())
-   {
-      configuration_set_bool(settings, settings->bools.video_fullscreen, true);
-   }
-
    if (g_defaults.settings.video_threaded_enable != video_threaded)
       video_driver_set_threaded(g_defaults.settings.video_threaded_enable);
 
@@ -1603,9 +1604,9 @@ static void config_set_defaults(void)
    settings->rewind_buffer_size                = rewind_buffer_size;
 
 #ifdef HAVE_LAKKA
-   settings->bools.ssh_enable                  = path_file_exists(LAKKA_SSH_PATH);
-   settings->bools.samba_enable                = path_file_exists(LAKKA_SAMBA_PATH);
-   settings->bools.bluetooth_enable            = path_file_exists(LAKKA_BLUETOOTH_PATH);
+   settings->bools.ssh_enable                  = filestream_exists(LAKKA_SSH_PATH);
+   settings->bools.samba_enable                = filestream_exists(LAKKA_SAMBA_PATH);
+   settings->bools.bluetooth_enable            = filestream_exists(LAKKA_BLUETOOTH_PATH);
 #endif
 
 #ifdef HAVE_MENU
@@ -1864,7 +1865,7 @@ static void config_set_defaults(void)
       temp_str[0] = '\0';
 
       fill_pathname_expand_special(temp_str,
-            g_defaults.path.config, 
+            g_defaults.path.config,
             PATH_MAX_LENGTH * sizeof(char));
       path_set(RARCH_PATH_CONFIG, temp_str);
       free(temp_str);
@@ -2140,6 +2141,24 @@ static void read_keybinds_axis(config_file_t *conf, unsigned user,
             input_config_bind_map_get_base(idx), bind);
 }
 
+static void read_keybinds_mbutton(config_file_t *conf, unsigned user,
+      unsigned idx, struct retro_keybind *bind)
+{
+   const char *prefix = NULL;
+
+   if (!input_config_bind_map_get_valid(idx))
+      return;
+   if (!input_config_bind_map_get_base(idx))
+      return;
+
+   prefix = input_config_get_prefix(user,
+         input_config_bind_map_get_meta(idx));
+
+   if (prefix)
+      input_config_parse_mouse_button(conf, prefix,
+            input_config_bind_map_get_base(idx), bind);
+}
+
 static void read_keybinds_user(config_file_t *conf, unsigned user)
 {
    unsigned i;
@@ -2154,6 +2173,7 @@ static void read_keybinds_user(config_file_t *conf, unsigned user)
       read_keybinds_keyboard(conf, user, i, bind);
       read_keybinds_button(conf, user, i, bind);
       read_keybinds_axis(conf, user, i, bind);
+      read_keybinds_mbutton(conf, user, i, bind);
    }
 }
 
@@ -2262,6 +2282,8 @@ static bool config_load_file(const char *path, bool set_defaults,
 #ifdef HAVE_NETWORKING
    char *override_netplay_ip_address               = NULL;
 #endif
+   const char *path_core                           = NULL;
+   const char *path_config                         = NULL;
    int bool_settings_size                          = sizeof(settings->bools)  / sizeof(settings->bools.placeholder);
    int float_settings_size                         = sizeof(settings->floats) / sizeof(settings->floats.placeholder);
    int int_settings_size                           = sizeof(settings->ints)   / sizeof(settings->ints.placeholder);
@@ -2349,9 +2371,6 @@ static bool config_load_file(const char *path, bool set_defaults,
       if (config_get_bool(conf, bool_settings[i].ident, &tmp))
          *bool_settings[i].ptr = tmp;
    }
-
-   if (!retroarch_is_forced_fullscreen())
-      CONFIG_GET_BOOL_BASE(conf, settings, bools.video_fullscreen, "video_fullscreen");
 
 #ifdef HAVE_NETWORKGAMEPAD
    for (i = 0; i < MAX_USERS; i++)
@@ -2534,13 +2553,16 @@ static bool config_load_file(const char *path, bool set_defaults,
    audio_set_float(AUDIO_ACTION_VOLUME_GAIN, settings->floats.audio_volume);
    audio_set_float(AUDIO_ACTION_MIXER_VOLUME_GAIN, settings->floats.audio_mixer_volume);
 
+   path_config = path_get(RARCH_PATH_CONFIG);
+   path_core   = path_get(RARCH_PATH_CORE);
+
    if (string_is_empty(settings->paths.path_content_history))
    {
       if (string_is_empty(settings->paths.directory_content_history))
       {
          fill_pathname_resolve_relative(
                settings->paths.path_content_history,
-               path_get(RARCH_PATH_CONFIG),
+               path_config,
                file_path_str(FILE_PATH_CONTENT_HISTORY),
                sizeof(settings->paths.path_content_history));
       }
@@ -2559,7 +2581,7 @@ static bool config_load_file(const char *path, bool set_defaults,
       {
          fill_pathname_resolve_relative(
                settings->paths.path_content_favorites,
-               path_get(RARCH_PATH_CONFIG),
+               path_config,
                file_path_str(FILE_PATH_CONTENT_FAVORITES),
                sizeof(settings->paths.path_content_favorites));
       }
@@ -2578,7 +2600,7 @@ static bool config_load_file(const char *path, bool set_defaults,
       {
          fill_pathname_resolve_relative(
                settings->paths.path_content_music_history,
-               path_get(RARCH_PATH_CONFIG),
+               path_config,
                file_path_str(FILE_PATH_CONTENT_MUSIC_HISTORY),
                sizeof(settings->paths.path_content_music_history));
       }
@@ -2597,7 +2619,7 @@ static bool config_load_file(const char *path, bool set_defaults,
       {
          fill_pathname_resolve_relative(
                settings->paths.path_content_video_history,
-               path_get(RARCH_PATH_CONFIG),
+               path_config,
                file_path_str(FILE_PATH_CONTENT_VIDEO_HISTORY),
                sizeof(settings->paths.path_content_video_history));
       }
@@ -2616,7 +2638,7 @@ static bool config_load_file(const char *path, bool set_defaults,
       {
          fill_pathname_resolve_relative(
                settings->paths.path_content_image_history,
-               path_get(RARCH_PATH_CONFIG),
+               path_config,
                file_path_str(FILE_PATH_CONTENT_IMAGE_HISTORY),
                sizeof(settings->paths.path_content_image_history));
       }
@@ -2642,14 +2664,14 @@ static bool config_load_file(const char *path, bool set_defaults,
    }
 
 #ifdef RARCH_CONSOLE
-   if (!string_is_empty(path_get(RARCH_PATH_CORE)))
+   if (!string_is_empty(path_core))
    {
 #endif
       /* Safe-guard against older behavior. */
-      if (path_is_directory(path_get(RARCH_PATH_CORE)))
+      if (path_is_directory(path_core))
       {
          RARCH_WARN("\"libretro_path\" is a directory, using this for \"libretro_directory\" instead.\n");
-         strlcpy(settings->paths.directory_libretro, path_get(RARCH_PATH_CORE),
+         strlcpy(settings->paths.directory_libretro, path_core,
                sizeof(settings->paths.directory_libretro));
          path_clear(RARCH_PATH_CORE);
       }
@@ -2690,21 +2712,18 @@ static bool config_load_file(const char *path, bool set_defaults,
       *settings->paths.directory_system = '\0';
 
    if (settings->floats.slowmotion_ratio < 1.0f)
-   {
       configuration_set_float(settings, settings->floats.slowmotion_ratio, 1.0f);
-   }
 
    /* Sanitize fastforward_ratio value - previously range was -1
     * and up (with 0 being skipped) */
    if (settings->floats.fastforward_ratio < 0.0f)
-   {
       configuration_set_float(settings, settings->floats.fastforward_ratio, 0.0f);
-   }
+
 
 #ifdef HAVE_LAKKA
-   settings->bools.ssh_enable       = path_file_exists(LAKKA_SSH_PATH);
-   settings->bools.samba_enable     = path_file_exists(LAKKA_SAMBA_PATH);
-   settings->bools.bluetooth_enable = path_file_exists(LAKKA_BLUETOOTH_PATH);
+   settings->bools.ssh_enable       = filestream_exists(LAKKA_SSH_PATH);
+   settings->bools.samba_enable     = filestream_exists(LAKKA_SAMBA_PATH);
+   settings->bools.bluetooth_enable = filestream_exists(LAKKA_BLUETOOTH_PATH);
 #endif
 
    if (!retroarch_override_setting_is_set(RARCH_OVERRIDE_SETTING_SAVE_PATH, NULL) &&
@@ -3343,6 +3362,38 @@ static void save_keybind_axis(config_file_t *conf, const char *prefix,
    }
 }
 
+static void save_keybind_mbutton(config_file_t *conf, const char *prefix,
+      const char *base, const struct retro_keybind *bind, bool save_empty)
+{
+	char key[64];
+
+	key[0] = '\0';
+
+	fill_pathname_join_delim_concat(key, prefix,
+		base, '_', "_mbtn", sizeof(key));
+
+	switch ( bind->mbutton )
+	{
+
+	case RETRO_DEVICE_ID_MOUSE_LEFT:			config_set_uint64(conf, key, 1);		break;
+	case RETRO_DEVICE_ID_MOUSE_RIGHT:			config_set_uint64(conf, key, 2);		break;
+	case RETRO_DEVICE_ID_MOUSE_MIDDLE:			config_set_uint64(conf, key, 3);		break;
+	case RETRO_DEVICE_ID_MOUSE_BUTTON_4:		config_set_uint64(conf, key, 4);		break;
+	case RETRO_DEVICE_ID_MOUSE_BUTTON_5:		config_set_uint64(conf, key, 5);		break;
+
+	case RETRO_DEVICE_ID_MOUSE_WHEELUP:			config_set_string(conf, key, "wu");		break;
+	case RETRO_DEVICE_ID_MOUSE_WHEELDOWN:		config_set_string(conf, key, "wd");		break;
+	case RETRO_DEVICE_ID_MOUSE_HORIZ_WHEELUP:	config_set_string(conf, key, "whu");	break;
+	case RETRO_DEVICE_ID_MOUSE_HORIZ_WHEELDOWN:	config_set_string(conf, key, "whd");	break;
+
+	default:
+		if ( save_empty ) {
+			config_set_string(conf, key, file_path_str(FILE_PATH_NUL));
+		}
+		break;
+	}
+}
+
 /**
  * save_keybind:
  * @conf               : pointer to config file object
@@ -3363,6 +3414,7 @@ static void save_keybind(config_file_t *conf, const char *prefix,
       save_keybind_key(conf, prefix, base, bind);
    save_keybind_joykey(conf, prefix, base, bind, save_empty);
    save_keybind_axis(conf, prefix, base, bind, save_empty);
+   save_keybind_mbutton(conf, prefix, base, bind, save_empty);
 }
 
 /**
@@ -3543,8 +3595,7 @@ bool config_save_autoconf_profile(const char *path, unsigned user)
    config_file_free(conf);
    free(buf);
    free(autoconf_file);
-   if (path_new)
-      free(path_new);
+   free(path_new);
    return ret;
 
 error:
@@ -3734,17 +3785,23 @@ bool config_save_file(const char *path)
 
 #ifdef HAVE_LAKKA
    if (settings->bools.ssh_enable)
-      filestream_close(filestream_open(LAKKA_SSH_PATH, RFILE_MODE_WRITE, -1));
+      filestream_close(filestream_open(LAKKA_SSH_PATH,
+               RETRO_VFS_FILE_ACCESS_WRITE,
+               RETRO_VFS_FILE_ACCESS_HINT_NONE));
    else
-      path_file_remove(LAKKA_SSH_PATH);
+      filestream_delete(LAKKA_SSH_PATH);
    if (settings->bools.samba_enable)
-      filestream_close(filestream_open(LAKKA_SAMBA_PATH, RFILE_MODE_WRITE, -1));
+      filestream_close(filestream_open(LAKKA_SAMBA_PATH,
+               RETRO_VFS_FILE_ACCESS_WRITE,
+               RETRO_VFS_FILE_ACCESS_HINT_NONE));
    else
-      path_file_remove(LAKKA_SAMBA_PATH);
+      filestream_delete(LAKKA_SAMBA_PATH);
    if (settings->bools.bluetooth_enable)
-      filestream_close(filestream_open(LAKKA_BLUETOOTH_PATH, RFILE_MODE_WRITE, -1));
+      filestream_close(filestream_open(LAKKA_BLUETOOTH_PATH,
+               RETRO_VFS_FILE_ACCESS_WRITE,
+               RETRO_VFS_FILE_ACCESS_HINT_NONE));
    else
-      path_file_remove(LAKKA_BLUETOOTH_PATH);
+      filestream_delete(LAKKA_BLUETOOTH_PATH);
 #endif
 
    for (i = 0; i < MAX_USERS; i++)
@@ -3817,7 +3874,7 @@ bool config_save_overrides(int override_type)
    fill_pathname_join(override_directory, config_directory, core_name,
       path_size);
 
-   if(!path_file_exists(override_directory))
+   if (!filestream_exists(override_directory))
        path_mkdir(override_directory);
 
    /* Concatenate strings into full paths for core_path, game_path */
