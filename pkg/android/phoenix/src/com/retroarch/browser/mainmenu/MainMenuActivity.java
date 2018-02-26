@@ -36,7 +36,7 @@ public final class MainMenuActivity extends PreferenceActivity
 	{
 		new AlertDialog.Builder(this).setMessage(message)
 			.setPositiveButton("OK", onClickListener).setCancelable(false)
-			.setNegativeButton("Cancel", null).create().show();
+			.setNegativeButton("Cancel", onClickListener).create().show();
 	}
 
 	private boolean addPermission(List<String> permissionsList, String permission)
