@@ -9,6 +9,7 @@ import com.google.android.gms.location.LocationRequest;
 import com.retroarch.browser.preferences.util.UserPreferences;
 
 import android.app.NativeActivity;
+import android.content.Intent;
 import android.content.IntentSender;
 import android.content.SharedPreferences;
 import android.location.Location;
@@ -133,10 +134,10 @@ implements ConnectionCallbacks, OnConnectionFailedListener, LocationListener
 	public void onLocationSetInterval(int update_interval_in_ms, int distance_interval)
 	{
 		// Use high accuracy
-        if (mLocationRequest == null)
-        	return;
-        
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+		if (mLocationRequest == null)
+			return;
+		
+		mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
 		if (update_interval_in_ms == 0)
 			mLocationRequest.setInterval(5 * 1000); // 5 seconds
@@ -181,7 +182,7 @@ implements ConnectionCallbacks, OnConnectionFailedListener, LocationListener
 		mUpdatesRequested = true;
 
 		// Connect the client.
-        mLocationClient.connect();
+		mLocationClient.connect();
 	}
 
 	/**
@@ -312,5 +313,24 @@ implements ConnectionCallbacks, OnConnectionFailedListener, LocationListener
 	{
 		onLocationStop();
 		super.onStop();
+	}
+
+	@Override
+	protected void onNewIntent(Intent intent)
+	{
+		super.onNewIntent(intent);
+		Log.d("RetroActivityLocation", "onNewIntent");
+
+		Intent oldIntent = getIntent();
+		// if open the same game not resart activity
+		if (oldIntent.getStringExtra("ROM").equals(intent.getStringExtra("ROM")))
+		{
+			return;
+		}
+
+		setIntent(intent);
+		finish();
+		startActivity(intent);
+		System.exit(0); // Whithout this the app will crash
 	}
 }
