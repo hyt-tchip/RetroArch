@@ -109,6 +109,7 @@
 #include "managers/cheat_manager.h"
 #include "managers/state_manager.h"
 #include "tasks/tasks_internal.h"
+#include "performance_counters.h"
 
 #include "version.h"
 #include "version_git.h"
@@ -129,6 +130,8 @@
 #else
 #define DEFAULT_EXT ""
 #endif
+
+#define SHADER_FILE_WATCH_DELAY_MSEC 500
 
 /* Descriptive names for options without short variant.
  *
@@ -179,10 +182,11 @@ static jmp_buf error_sjlj_context;
 static enum rarch_core_type current_core_type           = CORE_TYPE_PLAIN;
 static enum rarch_core_type explicit_current_core_type  = CORE_TYPE_PLAIN;
 static char error_string[255]                           = {0};
+static char runtime_shader_preset[255]                          = {0};
 
 #ifdef HAVE_THREAD_STORAGE
 static sthread_tls_t rarch_tls;
-const void *MAGIC_POINTER                               = (void*)0xB16B00B5;
+const void *MAGIC_POINTER                               = (void*)(uintptr_t)0xB16B00B5;
 #endif
 
 static retro_bits_t has_set_libretro_device;
@@ -868,16 +872,16 @@ static void retroarch_parse_input(int argc, char *argv[])
             break;
 
          case 'M':
-            if (string_is_equal_fast(optarg, "noload-nosave", 13))
+            if (string_is_equal(optarg, "noload-nosave"))
             {
                rarch_is_sram_load_disabled = true;
                rarch_is_sram_save_disabled = true;
             }
-            else if (string_is_equal_fast(optarg, "noload-save", 11))
+            else if (string_is_equal(optarg, "noload-save"))
                rarch_is_sram_load_disabled = true;
-            else if (string_is_equal_fast(optarg, "load-nosave", 11))
+            else if (string_is_equal(optarg, "load-nosave"))
                rarch_is_sram_save_disabled = true;
-            else if (string_is_not_equal_fast(optarg, "load-save", 9))
+            else if (string_is_not_equal(optarg, "load-save"))
             {
                RARCH_ERR("Invalid argument in --sram-mode.\n");
                retroarch_print_help(argv[0]);
@@ -1111,15 +1115,17 @@ static bool retroarch_init_state(void)
 
 bool retroarch_validate_game_options(char *s, size_t len, bool mkdir)
 {
-   char *core_path                        = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
-   char *config_directory                 = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
+   char *core_path                        = NULL;
+   char *config_directory                 = NULL;
    size_t str_size                        = PATH_MAX_LENGTH * sizeof(char);
    const char *core_name                  = runloop_system.info.library_name;
    const char *game_name                  = path_basename(path_get(RARCH_PATH_BASENAME));
 
    if (string_is_empty(core_name) || string_is_empty(game_name))
-      goto error;
+      return false;
 
+   core_path                              = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
+   config_directory                       = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
    config_directory[0] = core_path[0]     = '\0';
 
    fill_pathname_application_special(config_directory,
@@ -1140,11 +1146,6 @@ bool retroarch_validate_game_options(char *s, size_t len, bool mkdir)
    free(core_path);
    free(config_directory);
    return true;
-
-error:
-   free(core_path);
-   free(config_directory);
-   return false;
 }
 
 /* Validates CPU features for given processor architecture.
@@ -1222,7 +1223,7 @@ static void retroarch_main_init_media(void)
  *
  * Initializes the program.
  *
- * Returns: 0 on success, otherwise 1 if there was an error.
+ * Returns: true on success, otherwise false if there was an error.
  **/
 bool retroarch_main_init(int argc, char *argv[])
 {
@@ -1924,6 +1925,36 @@ void retroarch_unset_forced_fullscreen(void)
    rarch_force_fullscreen = false;
 }
 
+/* set a runtime shader preset without overwriting the settings value */
+void retroarch_set_shader_preset(const char* preset)
+{
+   if (!string_is_empty(preset))
+      strlcpy(runtime_shader_preset, preset, sizeof(runtime_shader_preset));
+   else
+      runtime_shader_preset[0] = '\0';
+}
+
+/* unset a runtime shader preset */
+void retroarch_unset_shader_preset(void)
+{
+   runtime_shader_preset[0] = '\0';
+}
+
+/* get the name of the current shader preset */
+char* retroarch_get_shader_preset(void)
+{
+   settings_t *settings = config_get_ptr();
+   if (!settings->bools.video_shader_enable)
+      return NULL;
+
+   if (!string_is_empty(runtime_shader_preset))
+      return runtime_shader_preset;
+   else if (!string_is_empty(settings->paths.path_shader))
+      return settings->paths.path_shader;
+   else
+      return NULL;
+}
+
 bool retroarch_override_setting_is_set(enum rarch_override_setting enum_idx, void *data)
 {
    switch (enum_idx)
@@ -2364,7 +2395,9 @@ static enum runloop_state runloop_check_state(
       unsigned *sleep_ms)
 {
    retro_bits_t current_input;
+#ifdef HAVE_MENU
    static retro_bits_t last_input   = {{0}};
+#endif
    static bool old_fs_toggle_pressed= false;
    static bool old_focus            = true;
    bool is_focused                  = false;
@@ -2383,9 +2416,8 @@ static enum runloop_state runloop_check_state(
 #endif
 	   input_keys_pressed(settings, &current_input);
 
-   last_input                       = current_input;
-
 #ifdef HAVE_MENU
+   last_input                       = current_input;
    if (
          ((settings->uints.input_menu_toggle_gamepad_combo != INPUT_TOGGLE_NONE) &&
           input_driver_toggle_button_combo(
@@ -2691,20 +2723,13 @@ static enum runloop_state runloop_check_state(
 #ifdef HAVE_NETWORKING
    /* Check Netplay */
    {
-      static bool old_netplay_flip  = false;
       static bool old_netplay_watch = false;
-      bool netplay_flip             = BIT256_GET(
-            current_input, RARCH_NETPLAY_FLIP);
       bool netplay_watch            = BIT256_GET(
             current_input, RARCH_NETPLAY_GAME_WATCH);
-
-      if (netplay_flip && !old_netplay_flip)
-         netplay_driver_ctl(RARCH_NETPLAY_CTL_FLIP_PLAYERS, NULL);
 
       if (netplay_watch && !old_netplay_watch)
          netplay_driver_ctl(RARCH_NETPLAY_CTL_GAME_WATCH, NULL);
 
-      old_netplay_flip              = netplay_flip;
       old_netplay_watch             = netplay_watch;
    }
 #endif
@@ -2998,6 +3023,46 @@ static enum runloop_state runloop_check_state(
       old_cheat_index_plus               = cheat_index_plus;
       old_cheat_index_minus              = cheat_index_minus;
       old_cheat_index_toggle             = cheat_index_toggle;
+   }
+
+   if (settings->bools.video_shader_watch_files)
+   {
+      static rarch_timer_t timer = {0};
+      static bool need_to_apply = false;
+
+      if (video_shader_check_for_changes())
+      {
+         need_to_apply = true;
+
+         if (!rarch_timer_is_running(&timer))
+         {
+            /* rarch_timer_t convenience functions only support whole seconds. */
+
+            /* rarch_timer_begin */
+            timer.timeout_end = cpu_features_get_time_usec() + SHADER_FILE_WATCH_DELAY_MSEC * 1000;
+            timer.timer_begin = true;
+            timer.timer_end = false;
+         }
+      }
+
+      /* If a file is modified atomically (moved/renamed from a different file), we have no idea how long that might take.
+       * If we're trying to re-apply shaders immediately after changes are made to the original file(s), the filesystem might be in an in-between
+       * state where the new file hasn't been moved over yet and the original file was already deleted. This leaves us no choice
+       * but to wait an arbitrary amount of time and hope for the best.
+       */
+      if (need_to_apply)
+      {
+         /* rarch_timer_tick */
+         timer.current = cpu_features_get_time_usec();
+         timer.timeout = (timer.timeout_end - timer.current) / 1000;
+
+         if (!timer.timer_end && rarch_timer_has_expired(&timer))
+         {
+            rarch_timer_end(&timer);
+            need_to_apply = false;
+            command_event(CMD_EVENT_SHADERS_APPLY_CHANGES, NULL);
+         }
+      }
    }
 
    return RUNLOOP_STATE_ITERATE;

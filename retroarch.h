@@ -266,11 +266,6 @@ typedef struct global
             rarch_resolution_t initial;
          } resolutions;
       } screen;
-
-      struct
-      {
-         bool system_bgm_enable;
-      } sound;
    } console;
 } global_t;
 
@@ -292,6 +287,12 @@ bool retroarch_is_forced_fullscreen(void);
 void retroarch_unset_forced_fullscreen(void);
 
 void retroarch_set_current_core_type(enum rarch_core_type type, bool explicitly_set);
+
+void retroarch_set_shader_preset(const char* preset);
+
+void retroarch_unset_shader_preset(void);
+
+char* retroarch_get_shader_preset(void);
 
 /**
  * retroarch_fail:

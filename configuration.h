@@ -27,6 +27,7 @@
 
 #include "gfx/video_driver.h"
 #include "input/input_defines.h"
+#include "led/led_defines.h"
 
 #define configuration_set_float(settings, var, newvar) \
 { \
@@ -80,6 +81,7 @@ typedef struct settings
       bool video_aspect_ratio_auto;
       bool video_scale_integer;
       bool video_shader_enable;
+      bool video_shader_watch_files;
       bool video_threaded;
       bool video_font_enable;
       bool video_disable_composition;
@@ -145,14 +147,14 @@ typedef struct settings
       bool menu_show_reboot;
       bool menu_materialui_icons_enable;
       bool menu_xmb_shadows_enable;
-      bool menu_xmb_show_settings;
-      bool menu_xmb_show_favorites;
-      bool menu_xmb_show_images;
-      bool menu_xmb_show_music;
-      bool menu_xmb_show_video;
-      bool menu_xmb_show_netplay;
-      bool menu_xmb_show_history;
-      bool menu_xmb_show_add;
+      bool menu_content_show_settings;
+      bool menu_content_show_favorites;
+      bool menu_content_show_images;
+      bool menu_content_show_music;
+      bool menu_content_show_video;
+      bool menu_content_show_netplay;
+      bool menu_content_show_history;
+      bool menu_content_show_add;
       bool menu_unified_controls;
       bool quick_menu_show_take_screenshot;
       bool quick_menu_show_save_load_state;
@@ -173,9 +175,9 @@ typedef struct settings
       bool netplay_allow_slaves;
       bool netplay_require_slaves;
       bool netplay_stateless_mode;
-      bool netplay_swap_input;
       bool netplay_nat_traversal;
       bool netplay_use_mitm_server;
+      bool netplay_request_devices[MAX_USERS];
 
       /* Network */
       bool network_buildbot_auto_extract_archive;
@@ -252,6 +254,7 @@ typedef struct settings
       bool bluetooth_enable;
 
       bool automatically_add_content_to_playlist;
+      bool video_window_show_decorations;
    } bools;
 
    struct
@@ -301,7 +304,7 @@ typedef struct settings
       unsigned audio_block_frames;
       unsigned audio_latency;
 
-
+      unsigned audio_resampler_quality;
 
       unsigned input_turbo_period;
       unsigned input_turbo_duty_cycle;
@@ -314,6 +317,8 @@ typedef struct settings
       unsigned netplay_port;
       unsigned netplay_input_latency_frames_min;
       unsigned netplay_input_latency_frames_range;
+      unsigned netplay_share_digital;
+      unsigned netplay_share_analog;
       unsigned bundle_assets_extract_version_current;
       unsigned bundle_assets_extract_last_version;
       unsigned content_history_size;
@@ -351,6 +356,9 @@ typedef struct settings
       unsigned menu_xmb_theme;
       unsigned menu_xmb_color_theme;
       unsigned menu_materialui_color_theme;
+      unsigned menu_font_color_red;
+      unsigned menu_font_color_green;
+      unsigned menu_font_color_blue;
 
       unsigned camera_width;
       unsigned camera_height;
@@ -368,6 +376,8 @@ typedef struct settings
       unsigned input_keymapper_ids[RARCH_CUSTOM_BIND_LIST_END];
 
       unsigned input_remap_ids[MAX_USERS][RARCH_CUSTOM_BIND_LIST_END];
+
+      unsigned led_map[MAX_LEDS];
    } uints;
 
    struct
@@ -378,6 +388,7 @@ typedef struct settings
       char record_driver[32];
       char camera_driver[32];
       char wifi_driver[32];
+      char led_driver[32];
       char location_driver[32];
       char menu_driver[32];
       char cheevos_username[32];
@@ -398,6 +409,8 @@ typedef struct settings
       char bundle_assets_src[PATH_MAX_LENGTH];
       char bundle_assets_dst[PATH_MAX_LENGTH];
       char bundle_assets_dst_subdir[PATH_MAX_LENGTH];
+
+      char netplay_mitm_server[255];
    } arrays;
 
    struct
@@ -413,7 +426,7 @@ typedef struct settings
       char browse_url[4096];
 
       char path_menu_xmb_font[PATH_MAX_LENGTH];
-      char menu_xmb_show_settings_password[PATH_MAX_LENGTH];
+      char menu_content_show_settings_password[PATH_MAX_LENGTH];
       char kiosk_mode_password[PATH_MAX_LENGTH];
       char path_cheat_database[PATH_MAX_LENGTH];
       char path_content_database[PATH_MAX_LENGTH];

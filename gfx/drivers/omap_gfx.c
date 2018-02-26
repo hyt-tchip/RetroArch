@@ -1143,14 +1143,14 @@ static const video_poke_interface_t omap_gfx_poke_interface = {
    NULL, /* get_proc_address */
    NULL, /* set_aspect_ratio */
    NULL, /* apply_state_changes */
-#ifdef HAVE_MENU
    omap_gfx_set_texture_frame,
    omap_gfx_set_texture_enable,
-#endif
    NULL,
-   NULL, /* show_mouse */
-   NULL, /* grab_mouse_toggle */
-   NULL
+   NULL,                         /* show_mouse */
+   NULL,                         /* grab_mouse_toggle */
+   NULL,                         /* get_current_shader */
+   NULL,                         /* get_current_software_framebuffer */
+   NULL                          /* get_hw_render_interface */
 };
 
 static void omap_gfx_get_poke_interface(void *data,

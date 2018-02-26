@@ -21,15 +21,8 @@
 #undef DIRECTINPUT_VERSION
 #define DIRECTINPUT_VERSION 0x0800
 
-#ifndef WM_MOUSEHWHEEL
-#define WM_MOUSEHWHEEL 0x20e
-#endif
-
-#ifndef WM_MOUSEWHEEL
-#define WM_MOUSEWHEEL 0x020A
-#endif
-
 #include <dinput.h>
+#include <dbt.h>
 
 #include <stdlib.h>
 #include <stddef.h>
@@ -37,6 +30,14 @@
 #include <boolean.h>
 
 #include <windowsx.h>
+
+#ifndef WM_MOUSEHWHEEL
+#define WM_MOUSEHWHEEL 0x20e
+#endif
+
+#ifndef WM_MOUSEWHEEL
+#define WM_MOUSEWHEEL 0x020A
+#endif
 
 #ifdef HAVE_CONFIG_H
 #include "../../config.h"
@@ -802,9 +803,21 @@ bool dinput_handle_message(void *dinput, UINT message, WPARAM wParam, LPARAM lPa
             return true;
          }
       case WM_DEVICECHANGE:
-            if (di->joypad)
-               di->joypad->destroy();
-            di->joypad = input_joypad_init_driver(di->joypad_driver_name, di);
+#if defined(_WIN32_WINNT) && _WIN32_WINNT >= 0x0500 /* 2K */
+            if (wParam == DBT_DEVICEARRIVAL  || wParam == DBT_DEVICEREMOVECOMPLETE)
+            {
+               PDEV_BROADCAST_HDR pHdr = (PDEV_BROADCAST_HDR)lParam;
+               if(pHdr->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE)
+               {
+                  PDEV_BROADCAST_DEVICEINTERFACE pDevInf = (PDEV_BROADCAST_DEVICEINTERFACE)pHdr;
+
+                  /* To-Do: Don't destroy everything, lets just handle new devices gracefully */
+                  if (di->joypad)
+                     di->joypad->destroy();
+                  di->joypad = input_joypad_init_driver(di->joypad_driver_name, di);
+               }
+            }
+#endif
          break;
       case WM_MOUSEWHEEL:
             if (((short) HIWORD(wParam))/120 > 0)

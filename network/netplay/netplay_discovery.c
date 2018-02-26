@@ -285,7 +285,8 @@ bool netplay_lan_ad_server(netplay_t *netplay)
             continue;
          }
 
-         strlcpy(reply_addr, ad_packet_buffer.address, NETPLAY_HOST_STR_LEN);
+         if (!string_is_empty(ad_packet_buffer.address))
+            strlcpy(reply_addr, ad_packet_buffer.address, NETPLAY_HOST_STR_LEN);
 
          for (k = 0; k < interfaces.size; k++)
          {
@@ -487,7 +488,7 @@ static bool netplay_lan_ad_client(void)
          strlcpy(host->content, ad_packet_buffer.content,
             NETPLAY_HOST_LONGSTR_LEN);
          strlcpy(host->frontend, ad_packet_buffer.frontend,
-            NETPLAY_HOST_LONGSTR_LEN);
+            NETPLAY_HOST_STR_LEN);
 
          host->content_crc                  =
             atoi(ad_packet_buffer.content_crc);

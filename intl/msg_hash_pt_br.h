@@ -25,9 +25,6 @@ MSG_HASH(MSG_PUBLIC_ADDRESS,
 MSG_HASH(MSG_NO_ARGUMENTS_SUPPLIED_AND_NO_MENU_BUILTIN,
 	 "Nenhum argumento fornecido e nenhum menu interno, exibindo ajuda..."
 	)
-MSG_HASH(MSG_NETPLAY_USERS_HAS_FLIPPED,
-	 "Usuários do Netplay foram invertidos"
-	)
 MSG_HASH(MSG_SETTING_DISK_IN_TRAY,
 	 "Definindo disco na bandeja"
 	)
@@ -38,10 +35,7 @@ MSG_HASH(MSG_NETPLAY_YOU_HAVE_LEFT_THE_GAME,
 	 "Você deixou o jogo"
 	)
 MSG_HASH(MSG_NETPLAY_YOU_HAVE_JOINED_AS_PLAYER_N,
-	 "Você se juntou como jogador %d"
-	)
-MSG_HASH(MSG_NETPLAY_IMPLEMENTATIONS_DIFFER,
-	 "As implementações são diferentes. Certifique-se de que está usando exatamente as mesmas versões do RetroArch e do núcleo."
+	 "Você se juntou como jogador %u"
 	)
 MSG_HASH(MSG_NETPLAY_ENDIAN_DEPENDENT,
 	 "Este núcleo não suporta Netplay inter-arquitetura entre estes sistemas"
@@ -857,9 +851,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_META_MOVIE_RECORD_TOGGLE,
 MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_META_MUTE,
 	 "Alternar áudio mudo"
 	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_META_NETPLAY_FLIP,
-	 "Inverter usuários do Netplay"
-	)
 MSG_HASH(MENU_ENUM_LABEL_VALUE_INPUT_META_NETPLAY_GAME_WATCH,
 	 "Alternar modo jogador/espectador do Netplay"
 	)
@@ -1022,6 +1013,10 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_LANG_SPANISH,
 MSG_HASH(MENU_ENUM_LABEL_VALUE_LANG_VIETNAMESE,
 	 "Vietnamita"
 	)
+MSG_HASH(
+   MENU_ENUM_LABEL_VALUE_LANG_ARABIC,
+   "Arabic"
+   )
 MSG_HASH(MENU_ENUM_LABEL_VALUE_LEFT_ANALOG,
 	 "Analógico Esquerdo"
 	)
@@ -1159,9 +1154,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_NETPLAY_INPUT_LATENCY_FRAMES_MIN,
 	)
 MSG_HASH(MENU_ENUM_LABEL_VALUE_NETPLAY_INPUT_LATENCY_FRAMES_RANGE,
 	 "Faixa de Quadros de Latência de Entrada"
-	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_NETPLAY_CLIENT_SWAP_INPUT,
-	 "J2 do Netplay Usa C1"
 	)
 MSG_HASH(MENU_ENUM_LABEL_VALUE_NETPLAY_DELAY_FRAMES,
 	 "Atraso de Quadros do Netplay"
@@ -2156,9 +2148,6 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_VIDEO_SHADER_PARAMETERS,
 MSG_HASH(MENU_ENUM_LABEL_VALUE_VIDEO_SHADER_PRESET,
 	 "Carregar Predefinição de Shader"
 	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_VIDEO_SHADER_PRESET_PARAMETERS,
-	 "Menu de Parâmetros de Shader"
-	)
 MSG_HASH(MENU_ENUM_LABEL_VALUE_VIDEO_SHADER_PRESET_SAVE_AS,
 	 "Salvar Predefinição de Shader Como"
 	)
@@ -2243,6 +2232,9 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_FLATUI,
 MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_MONOCHROME,
 	 "Monocromático"
 	)
+MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_MONOCHROME_INVERTED,
+    "Monocromático Inverted"
+   )
 MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_ICON_THEME_SYSTEMATIC,
 	 "Sistemático"
 	)
@@ -2303,28 +2295,28 @@ MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SCALE_FACTOR,
 MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SHADOWS_ENABLE,
 	 "Habilitar Sombras dos Ícones"
 	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SHOW_HISTORY,
+MSG_HASH(MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_HISTORY,
 	 "Exibir Aba de Histórico"
 	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SHOW_ADD,
+MSG_HASH(MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_ADD,
 	 "Exibir Aba de Importação de Conteúdo"
 	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SHOW_FAVORITES,
+MSG_HASH(MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_FAVORITES,
      "Exibir Aba de Favoritos"
 	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SHOW_IMAGES,
+MSG_HASH(MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_IMAGES,
 	 "Exibir Aba de Imagem"
 	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SHOW_MUSIC,
+MSG_HASH(MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_MUSIC,
 	 "Exibir Aba de Música"
 	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SHOW_SETTINGS,
+MSG_HASH(MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_SETTINGS,
 	 "Exibir Aba de Configurações"
 	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SHOW_VIDEO,
+MSG_HASH(MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_VIDEO,
 	 "Exibir Aba de Vídeo"
 	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SHOW_NETPLAY,
+MSG_HASH(MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_NETPLAY,
 	 "Exibir Aba de Netplay"
 	)
 MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_THEME,
@@ -3578,9 +3570,6 @@ MSG_HASH(MENU_ENUM_SUBLABEL_SORT_SAVEFILES_ENABLE,
 MSG_HASH(MENU_ENUM_SUBLABEL_SORT_SAVESTATES_ENABLE,
 	 "Ordenar os Estados de Jogo em pastas com o nome do núcleo utilizado."
 	)
-MSG_HASH(MENU_ENUM_SUBLABEL_NETPLAY_CLIENT_SWAP_INPUT,
-	 "Ao se tornar cliente do Netplay, use os vínculos de teclas para o Jogador 1."
-	)
 MSG_HASH(MENU_ENUM_SUBLABEL_CORE_UPDATER_BUILDBOT_URL,
 	 "URL para o diretório de atualização de núcleos no buildbot do Libreto."
 	)
@@ -3755,28 +3744,28 @@ MSG_HASH(MENU_ENUM_SUBLABEL_XMB_RIBBON_ENABLE,
 MSG_HASH(MENU_ENUM_SUBLABEL_XMB_FONT,
 	 "Selecionar uma fonte principal diferente para ser usada pelo menu."
 	)
-MSG_HASH(MENU_ENUM_SUBLABEL_XMB_SHOW_FAVORITES,
+MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_FAVORITES,
      "Exibir a aba de favoritos dentro do menu principal."
 	)
-MSG_HASH(MENU_ENUM_SUBLABEL_XMB_SHOW_IMAGES,
+MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_IMAGES,
 	 "Exibir a aba de imagem dentro do menu principal."
 	)
-MSG_HASH(MENU_ENUM_SUBLABEL_XMB_SHOW_MUSIC,
+MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_MUSIC,
 	 "Exibir a aba de música dentro do menu principal."
 	)
-MSG_HASH(MENU_ENUM_SUBLABEL_XMB_SHOW_VIDEO,
+MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_VIDEO,
 	 "Exibir a aba de vídeo dentro do menu principal."
 	)
-MSG_HASH(MENU_ENUM_SUBLABEL_XMB_SHOW_NETPLAY,
+MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_NETPLAY,
 	 "Exibir a aba de Netplay dentro do menu principal."
 	)
-MSG_HASH(MENU_ENUM_SUBLABEL_XMB_SHOW_SETTINGS,
+MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_SETTINGS,
 	 "Mostrar a aba de configurações dentro do menu principal."
 	)
-MSG_HASH(MENU_ENUM_SUBLABEL_XMB_SHOW_HISTORY,
+MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_HISTORY,
 	 "Mostrar a aba de histórico recente dentro do menu principal."
 	)
-MSG_HASH(MENU_ENUM_SUBLABEL_XMB_SHOW_ADD,
+MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_ADD,
 	 "Mostrar a aba de importação de conteúdo dentro do menu principal."
 	)
 MSG_HASH(MENU_ENUM_SUBLABEL_RGUI_SHOW_START_SCREEN,
@@ -4016,7 +4005,7 @@ MSG_HASH(MENU_ENUM_SUBLABEL_MATERIALUI_ICONS_ENABLE,
 MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_MAIN_MENU_ENABLE_SETTINGS,
 	 "Enable Settings Tab"
 	)
-MSG_HASH(MENU_ENUM_LABEL_VALUE_XMB_SHOW_SETTINGS_PASSWORD,
+MSG_HASH(MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_SETTINGS_PASSWORD,
       "Set Password For Enabling Settings Tab"
    )
 MSG_HASH(MSG_INPUT_ENABLE_SETTINGS_PASSWORD,
@@ -4031,7 +4020,7 @@ MSG_HASH(MSG_INPUT_ENABLE_SETTINGS_PASSWORD_NOK,
 MSG_HASH(MENU_ENUM_SUBLABEL_XMB_MAIN_MENU_ENABLE_SETTINGS,
 	 "Enables the Settings tab. A restart is required for the tab to appear."
 	)
-MSG_HASH(MENU_ENUM_SUBLABEL_XMB_SHOW_SETTINGS_PASSWORD,
+MSG_HASH(MENU_ENUM_SUBLABEL_CONTENT_SHOW_SETTINGS_PASSWORD,
       "Supplying a password when hiding the settings tab makes it possible to later restore it from the menu, by going to the Main Menu tab, selecting Enable Settings Tab and entering the password."
    )
 MSG_HASH(MENU_ENUM_SUBLABEL_PLAYLIST_ENTRY_RENAME,
@@ -4187,3 +4176,7 @@ MSG_HASH(MENU_ENUM_SUBLABEL_AUTOMATICALLY_ADD_CONTENT_TO_PLAYLIST,
       "Automatically scans loaded content so they appear inside playlists.")
 MSG_HASH(MSG_SCANNING_OF_FILE_FINISHED,
       "Scanning of file finished")
+MSG_HASH(MENU_ENUM_LABEL_VALUE_AUDIO_RESAMPLER_QUALITY,
+      "Audio Resampler Quality")
+MSG_HASH(MENU_ENUM_SUBLABEL_AUDIO_RESAMPLER_QUALITY,
+      "Lower this value to favor performance/lower latency over audio quality, increase if you want better audio quality at the expense of performance/lower latency.")

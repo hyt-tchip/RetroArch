@@ -54,6 +54,7 @@
 #include "driver.h"
 #include "performance_counters.h"
 #include "gfx/video_driver.h"
+#include "led/led_driver.h"
 
 #include "cores/internal_cores.h"
 #include "frontend/frontend_driver.h"
@@ -679,6 +680,9 @@ static void rarch_log_libretro(enum retro_log_level level,
    settings_t *settings = config_get_ptr();
 
    if ((unsigned)level < settings->uints.libretro_log_level)
+      return;
+
+   if (!verbosity_is_enabled())
       return;
 
    va_start(vp, fmt);
@@ -1680,6 +1684,15 @@ bool rarch_environment_cb(unsigned cmd, void *data)
          break;
       }
 
+      case RETRO_ENVIRONMENT_GET_LED_INTERFACE:
+      {
+         struct retro_led_interface *ledintf =
+            (struct retro_led_interface *)data;
+         if (ledintf)
+            ledintf->set_led_state = led_driver_set_led;
+      }
+      break;
+      
       default:
          RARCH_LOG("Environ UNSUPPORTED (#%u).\n", cmd);
          return false;

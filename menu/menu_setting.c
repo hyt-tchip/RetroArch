@@ -28,6 +28,7 @@
 #include <string/stdstring.h>
 #include <lists/string_list.h>
 #include <streams/file_stream.h>
+#include <audio/audio_resampler.h>
 
 #include <compat/strl.h>
 
@@ -84,6 +85,10 @@
 #include "../gfx/video_display_server.h"
 
 #include "../tasks/tasks_internal.h"
+
+#ifdef HAVE_NETWORKING
+#include "../network/netplay/netplay.h"
+#endif
 
 enum settings_list_type
 {
@@ -570,6 +575,14 @@ static void setting_get_string_representation_uint_autosave_interval(void *data,
 }
 #endif
 
+#if defined(HAVE_NETWORKING)
+static void setting_get_string_representation_netplay_mitm_server(void *data,
+      char *s, size_t len)
+{
+
+}
+#endif
+
 #ifdef HAVE_LANGEXTRA
 static void setting_get_string_representation_uint_user_language(void *data,
       char *s, size_t len)
@@ -592,6 +605,7 @@ static void setting_get_string_representation_uint_user_language(void *data,
    modes[RETRO_LANGUAGE_ESPERANTO]              = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_LANG_ESPERANTO);
    modes[RETRO_LANGUAGE_POLISH]                 = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_LANG_POLISH);
    modes[RETRO_LANGUAGE_VIETNAMESE]             = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_LANG_VIETNAMESE);
+   modes[RETRO_LANGUAGE_ARABIC]                 = msg_hash_to_str(MENU_ENUM_LABEL_VALUE_LANG_ARABIC);
 
    strlcpy(s, modes[*msg_hash_get_uint(MSG_HASH_USER_LANGUAGE)], len);
 }
@@ -1305,13 +1319,13 @@ static int setting_action_right_libretro_device_type(
 
 static int setting_action_left_bind_device(void *data, bool wraparound)
 {
-   unsigned index_offset;
    unsigned               *p = NULL;
-   unsigned max_devices        = input_config_get_device_count();
+   unsigned index_offset     = 0;
+   unsigned max_devices      = input_config_get_device_count();
    rarch_setting_t *setting  = (rarch_setting_t*)data;
    settings_t      *settings = config_get_ptr();
 
-   if (!setting)
+   if (!setting || max_devices == 0)
       return -1;
 
    index_offset = setting->index_offset;
@@ -1460,7 +1474,8 @@ setting_get_string_representation_st_float_video_refresh_rate_auto(
    if (!setting)
       return;
 
-   if (video_monitor_fps_statistics(&video_refresh_rate, &deviation, &sample_points))
+   if (video_monitor_fps_statistics(&video_refresh_rate,
+            &deviation, &sample_points))
    {
       snprintf(s, len, "%.3f Hz (%.1f%% dev, %u samples)",
             video_refresh_rate, 100.0 * deviation, sample_points);
@@ -1511,7 +1526,8 @@ static void get_string_representation_bind_device(void * data, char *s,
 
    if (map < max_devices)
    {
-      const char *device_name = input_config_get_device_name(map);
+      const char *device_name = input_config_get_device_display_name(map) ? 
+                                input_config_get_device_display_name(map) : input_config_get_device_name(map);
 
       if (!string_is_empty(device_name))
       {
@@ -1837,6 +1853,9 @@ void general_write_handler(void *data)
          break;
       case MENU_ENUM_LABEL_VIDEO_WINDOW_OPACITY:
          video_display_server_set_window_opacity(settings->uints.video_window_opacity);
+         break;
+      case MENU_ENUM_LABEL_VIDEO_WINDOW_SHOW_DECORATIONS:
+         video_display_server_set_window_decorations(settings->bools.video_window_show_decorations);
          break;
       default:
          break;
@@ -2364,7 +2383,7 @@ static bool setting_append_list(
                   parent_group);
          }
 
-         if (string_is_not_equal_fast(settings->arrays.menu_driver, "xmb", 3))
+         if (string_is_not_equal(settings->arrays.menu_driver, "xmb"))
          {
             CONFIG_ACTION(
                   list, list_info,
@@ -2488,7 +2507,7 @@ static bool setting_append_list(
          settings_data_list_current_add_flags(list, list_info, SD_FLAG_LAKKA_ADVANCED);
 
 #if !defined(IOS)
-         /* Apple rejects iOS apps that lets you forcibly quit an application. */
+         /* Apple rejects iOS apps that let you forcibly quit them. */
          CONFIG_ACTION(
                list, list_info,
                MENU_ENUM_LABEL_QUIT_RETROARCH,
@@ -2700,7 +2719,7 @@ static bool setting_append_list(
                parent_group);
          settings_data_list_current_add_flags(list, list_info, SD_FLAG_ADVANCED);
 
-         if (string_is_not_equal_fast(settings->arrays.wifi_driver, "null", 4))
+         if (string_is_not_equal(settings->arrays.wifi_driver, "null"))
          {
             CONFIG_ACTION(
                   list, list_info,
@@ -3437,7 +3456,7 @@ static bool setting_append_list(
                &setting_get_string_representation_st_float_video_refresh_rate_auto;
             settings_data_list_current_add_flags(list, list_info, SD_FLAG_LAKKA_ADVANCED);
 
-            if (string_is_equal_fast(settings->arrays.video_driver, "gl", 2))
+            if (string_is_equal(settings->arrays.video_driver, "gl"))
             {
                CONFIG_BOOL(
                      list, list_info,
@@ -3649,6 +3668,22 @@ static bool setting_append_list(
 
             CONFIG_BOOL(
                   list, list_info,
+                  &settings->bools.video_window_show_decorations,
+                  MENU_ENUM_LABEL_VIDEO_WINDOW_SHOW_DECORATIONS,
+                  MENU_ENUM_LABEL_VALUE_VIDEO_WINDOW_SHOW_DECORATIONS,
+                  window_decorations,
+                  MENU_ENUM_LABEL_VALUE_OFF,
+                  MENU_ENUM_LABEL_VALUE_ON,
+                  &group_info,
+                  &subgroup_info,
+                  parent_group,
+                  general_write_handler,
+                  general_read_handler,
+                  SD_FLAG_NONE);
+            menu_settings_list_current_add_cmd(list, list_info, CMD_EVENT_REINIT);
+
+            CONFIG_BOOL(
+                  list, list_info,
                   &settings->bools.video_scale_integer,
                   MENU_ENUM_LABEL_VIDEO_SCALE_INTEGER,
                   MENU_ENUM_LABEL_VALUE_VIDEO_SCALE_INTEGER,
@@ -3804,7 +3839,7 @@ static bool setting_append_list(
             settings_data_list_current_add_flags(list, list_info, SD_FLAG_CMD_APPLY_AUTO);
             settings_data_list_current_add_flags(list, list_info, SD_FLAG_LAKKA_ADVANCED);
 
-            if (string_is_equal_fast(settings->arrays.video_driver, "gl", 2))
+            if (string_is_equal(settings->arrays.video_driver, "gl"))
             {
                CONFIG_BOOL(
                      list, list_info,
@@ -4019,24 +4054,6 @@ static bool setting_append_list(
          menu_settings_list_current_add_range(list, list_info, -80, 12, 1.0, true, true);
          settings_data_list_current_add_flags(list, list_info, SD_FLAG_LAKKA_ADVANCED);
 
-#ifdef __CELLOS_LV2__
-         CONFIG_BOOL(
-               list, list_info,
-               &global->console.sound.system_bgm_enable,
-               MENU_ENUM_LABEL_SYSTEM_BGM_ENABLE,
-               MENU_ENUM_LABEL_VALUE_SYSTEM_BGM_ENABLE,
-               false,
-               MENU_ENUM_LABEL_VALUE_OFF,
-               MENU_ENUM_LABEL_VALUE_ON,
-               &group_info,
-               &subgroup_info,
-               parent_group,
-               general_write_handler,
-               general_read_handler,
-               SD_FLAG_NONE
-               );
-#endif
-
          END_SUB_GROUP(list, list_info, parent_group);
 
          parent_group = msg_hash_to_str(MENU_ENUM_LABEL_SETTINGS);
@@ -4080,6 +4097,19 @@ static bool setting_append_list(
                general_read_handler);
          menu_settings_list_current_add_range(list, list_info, 0, 512, 1.0, true, true);
          settings_data_list_current_add_flags(list, list_info, SD_FLAG_LAKKA_ADVANCED);
+
+         CONFIG_UINT(
+               list, list_info,
+               &settings->uints.audio_resampler_quality,
+               MENU_ENUM_LABEL_AUDIO_RESAMPLER_QUALITY,
+               MENU_ENUM_LABEL_VALUE_AUDIO_RESAMPLER_QUALITY,
+               audio_resampler_quality_level,
+               &group_info,
+               &subgroup_info,
+               parent_group,
+               general_write_handler,
+               general_read_handler);
+         menu_settings_list_current_add_range(list, list_info, RESAMPLER_QUALITY_DONTCARE, RESAMPLER_QUALITY_HIGHEST, 1.0, true, true);
 
          CONFIG_FLOAT(
                list, list_info,
@@ -4201,7 +4231,7 @@ static bool setting_append_list(
          settings_data_list_current_add_flags(list, list_info, SD_FLAG_LAKKA_ADVANCED);
 
 #ifdef HAVE_WASAPI
-         if (string_is_equal_fast(settings->arrays.audio_driver, "wasapi", 6))
+         if (string_is_equal(settings->arrays.audio_driver, "wasapi"))
          {
             CONFIG_BOOL(
                   list, list_info,
@@ -4790,7 +4820,7 @@ static bool setting_append_list(
                parent_group,
                general_write_handler,
                general_read_handler);
-         menu_settings_list_current_add_range(list, list_info, 1, 10, 1.0, true, true);
+         menu_settings_list_current_add_range(list, list_info, 1, 10, 0.1, true, true);
 
          CONFIG_BOOL(
                list, list_info,
@@ -5162,7 +5192,7 @@ static bool setting_append_list(
 
          START_SUB_GROUP(list, list_info, "State", &group_info, &subgroup_info, parent_group);
 
-         if (string_is_not_equal_fast(settings->arrays.menu_driver, "rgui", 4))
+         if (string_is_not_equal(settings->arrays.menu_driver, "rgui"))
          {
             CONFIG_PATH(
                   list, list_info,
@@ -5209,7 +5239,7 @@ static bool setting_append_list(
             settings_data_list_current_add_flags(list, list_info, SD_FLAG_LAKKA_ADVANCED);
          }
 
-         if (string_is_equal_fast(settings->arrays.menu_driver, "xmb", 3))
+         if (string_is_equal(settings->arrays.menu_driver, "xmb"))
          {
             CONFIG_BOOL(
                   list, list_info,
@@ -5357,7 +5387,7 @@ static bool setting_append_list(
                general_read_handler,
                SD_FLAG_NONE);
 
-         if (string_is_equal_fast(settings->arrays.menu_driver, "xmb", 3))
+         if (string_is_equal(settings->arrays.menu_driver, "xmb"))
          {
             CONFIG_BOOL(
                   list, list_info,
@@ -5456,9 +5486,10 @@ static bool setting_append_list(
 
          START_SUB_GROUP(list, list_info, "Display", &group_info, &subgroup_info, parent_group);
 
-         /* only GLUI uses these values, don't show them on other drivers */
-         if (string_is_equal_fast(settings->arrays.menu_driver, "glui", 4))
+         if (string_is_equal(settings->arrays.menu_driver, "glui"))
          {
+            /* only GLUI uses these values, don't show 
+             * them on other drivers */
             CONFIG_BOOL(
                   list, list_info,
                   &settings->bools.menu_dpi_override_enable,
@@ -5489,9 +5520,10 @@ static bool setting_append_list(
          }
 
 #ifdef HAVE_XMB
-         /* only XMB uses these values, don't show them on other drivers */
-         if (string_is_equal_fast(settings->arrays.menu_driver, "xmb", 3))
+         if (string_is_equal(settings->arrays.menu_driver, "xmb"))
          {
+            /* only XMB uses these values, don't show 
+             * them on other drivers. */
             CONFIG_UINT(
                   list, list_info,
                   &settings->uints.menu_xmb_alpha_factor,
@@ -5517,7 +5549,7 @@ static bool setting_append_list(
                   parent_group,
                   general_write_handler,
                   general_read_handler);
-            menu_settings_list_current_add_range(list, list_info, 0, 100, 1, true, true);
+            menu_settings_list_current_add_range(list, list_info, 0, 200, 1, true, true);
             settings_data_list_current_add_flags(list, list_info, SD_FLAG_LAKKA_ADVANCED);
 
             CONFIG_PATH(
@@ -5534,6 +5566,48 @@ static bool setting_append_list(
                   general_read_handler);
             settings_data_list_current_add_flags(list, list_info, SD_FLAG_LAKKA_ADVANCED);
             menu_settings_list_current_add_cmd(list, list_info, CMD_EVENT_REINIT);
+
+            CONFIG_UINT(
+                  list, list_info,
+                  &settings->uints.menu_font_color_red,
+                  MENU_ENUM_LABEL_MENU_FONT_COLOR_RED,
+                  MENU_ENUM_LABEL_VALUE_MENU_FONT_COLOR_RED,
+                  menu_font_color_red,
+                  &group_info,
+                  &subgroup_info,
+                  parent_group,
+                  general_write_handler,
+                  general_read_handler);
+            menu_settings_list_current_add_range(list, list_info, 0, 255, 1, true, true);
+            settings_data_list_current_add_flags(list, list_info, SD_FLAG_ADVANCED);
+
+            CONFIG_UINT(
+                  list, list_info,
+                  &settings->uints.menu_font_color_green,
+                  MENU_ENUM_LABEL_MENU_FONT_COLOR_GREEN,
+                  MENU_ENUM_LABEL_VALUE_MENU_FONT_COLOR_GREEN,
+                  menu_font_color_green,
+                  &group_info,
+                  &subgroup_info,
+                  parent_group,
+                  general_write_handler,
+                  general_read_handler);
+            menu_settings_list_current_add_range(list, list_info, 0, 255, 1, true, true);
+            settings_data_list_current_add_flags(list, list_info, SD_FLAG_ADVANCED);
+
+            CONFIG_UINT(
+                  list, list_info,
+                  &settings->uints.menu_font_color_blue,
+                  MENU_ENUM_LABEL_MENU_FONT_COLOR_BLUE,
+                  MENU_ENUM_LABEL_VALUE_MENU_FONT_COLOR_BLUE,
+                  menu_font_color_blue,
+                  &group_info,
+                  &subgroup_info,
+                  parent_group,
+                  general_write_handler,
+                  general_read_handler);
+            menu_settings_list_current_add_range(list, list_info, 0, 255, 1, true, true);
+            settings_data_list_current_add_flags(list, list_info, SD_FLAG_ADVANCED);
 
             CONFIG_UINT(
                   list, list_info,
@@ -5591,7 +5665,8 @@ static bool setting_append_list(
                   general_write_handler,
                   general_read_handler);
             menu_settings_list_current_add_range(list, list_info, 0, XMB_THEME_LAST-1, 1, true, true);
-
+		 }
+#endif
             CONFIG_BOOL(
                   list, list_info,
                   &settings->bools.menu_show_load_core,
@@ -5681,7 +5756,8 @@ static bool setting_append_list(
                   general_write_handler,
                   general_read_handler,
                   SD_FLAG_NONE);
-
+				  
+#ifdef HAVE_LAKKA
             CONFIG_BOOL(
                   list, list_info,
                   &settings->bools.menu_show_reboot,
@@ -5696,13 +5772,17 @@ static bool setting_append_list(
                   general_write_handler,
                   general_read_handler,
                   SD_FLAG_NONE);
-
+#endif
+				  
+#ifdef HAVE_XMB
+         if (string_is_equal(settings->arrays.menu_driver, "xmb"))
+         {
             CONFIG_BOOL(
                   list, list_info,
-                  &settings->bools.menu_xmb_show_settings,
-                  MENU_ENUM_LABEL_XMB_SHOW_SETTINGS,
-                  MENU_ENUM_LABEL_VALUE_XMB_SHOW_SETTINGS,
-                  xmb_show_settings,
+                  &settings->bools.menu_content_show_settings,
+                  MENU_ENUM_LABEL_CONTENT_SHOW_SETTINGS,
+                  MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_SETTINGS,
+                  content_show_settings,
                   MENU_ENUM_LABEL_VALUE_OFF,
                   MENU_ENUM_LABEL_VALUE_ON,
                   &group_info,
@@ -5712,27 +5792,29 @@ static bool setting_append_list(
                   general_read_handler,
                   SD_FLAG_NONE);
             settings_data_list_current_add_flags(list, list_info, SD_FLAG_LAKKA_ADVANCED);
-
-            CONFIG_STRING(
-               list, list_info,
-               settings->paths.menu_xmb_show_settings_password,
-               sizeof(settings->paths.menu_xmb_show_settings_password),
-               MENU_ENUM_LABEL_XMB_SHOW_SETTINGS_PASSWORD,
-               MENU_ENUM_LABEL_VALUE_XMB_SHOW_SETTINGS_PASSWORD,
-               "",
-               &group_info,
-               &subgroup_info,
-               parent_group,
-               general_write_handler,
-               general_read_handler);
-            settings_data_list_current_add_flags(list, list_info, SD_FLAG_ALLOW_INPUT | SD_FLAG_LAKKA_ADVANCED);
-
+			
+				CONFIG_STRING(
+				   list, list_info,
+				   settings->paths.menu_content_show_settings_password,
+				   sizeof(settings->paths.menu_content_show_settings_password),
+				   MENU_ENUM_LABEL_CONTENT_SHOW_SETTINGS_PASSWORD,
+				   MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_SETTINGS_PASSWORD,
+				   "",
+				   &group_info,
+				   &subgroup_info,
+				   parent_group,
+				   general_write_handler,
+				   general_read_handler);
+				settings_data_list_current_add_flags(list, list_info, SD_FLAG_ALLOW_INPUT | SD_FLAG_LAKKA_ADVANCED);
+			}
+#endif
+			
             CONFIG_BOOL(
                   list, list_info,
-                  &settings->bools.menu_xmb_show_favorites,
-                  MENU_ENUM_LABEL_XMB_SHOW_FAVORITES,
-                  MENU_ENUM_LABEL_VALUE_XMB_SHOW_FAVORITES,
-                  xmb_show_favorites,
+                  &settings->bools.menu_content_show_favorites,
+                  MENU_ENUM_LABEL_CONTENT_SHOW_FAVORITES,
+                  MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_FAVORITES,
+                  content_show_favorites,
                   MENU_ENUM_LABEL_VALUE_OFF,
                   MENU_ENUM_LABEL_VALUE_ON,
                   &group_info,
@@ -5745,10 +5827,10 @@ static bool setting_append_list(
 #ifdef HAVE_IMAGEVIEWER
             CONFIG_BOOL(
                   list, list_info,
-                  &settings->bools.menu_xmb_show_images,
-                  MENU_ENUM_LABEL_XMB_SHOW_IMAGES,
-                  MENU_ENUM_LABEL_VALUE_XMB_SHOW_IMAGES,
-                  xmb_show_images,
+                  &settings->bools.menu_content_show_images,
+                  MENU_ENUM_LABEL_CONTENT_SHOW_IMAGES,
+                  MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_IMAGES,
+                  content_show_images,
                   MENU_ENUM_LABEL_VALUE_OFF,
                   MENU_ENUM_LABEL_VALUE_ON,
                   &group_info,
@@ -5761,10 +5843,10 @@ static bool setting_append_list(
 
             CONFIG_BOOL(
                   list, list_info,
-                  &settings->bools.menu_xmb_show_music,
-                  MENU_ENUM_LABEL_XMB_SHOW_MUSIC,
-                  MENU_ENUM_LABEL_VALUE_XMB_SHOW_MUSIC,
-                  xmb_show_music,
+                  &settings->bools.menu_content_show_music,
+                  MENU_ENUM_LABEL_CONTENT_SHOW_MUSIC,
+                  MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_MUSIC,
+                  content_show_music,
                   MENU_ENUM_LABEL_VALUE_OFF,
                   MENU_ENUM_LABEL_VALUE_ON,
                   &group_info,
@@ -5777,10 +5859,10 @@ static bool setting_append_list(
 #ifdef HAVE_FFMPEG
             CONFIG_BOOL(
                   list, list_info,
-                  &settings->bools.menu_xmb_show_video,
-                  MENU_ENUM_LABEL_XMB_SHOW_VIDEO,
-                  MENU_ENUM_LABEL_VALUE_XMB_SHOW_VIDEO,
-                  xmb_show_video,
+                  &settings->bools.menu_content_show_video,
+                  MENU_ENUM_LABEL_CONTENT_SHOW_VIDEO,
+                  MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_VIDEO,
+                  content_show_video,
                   MENU_ENUM_LABEL_VALUE_OFF,
                   MENU_ENUM_LABEL_VALUE_ON,
                   &group_info,
@@ -5793,10 +5875,10 @@ static bool setting_append_list(
 
             CONFIG_BOOL(
                   list, list_info,
-                  &settings->bools.menu_xmb_show_history,
-                  MENU_ENUM_LABEL_XMB_SHOW_HISTORY,
-                  MENU_ENUM_LABEL_VALUE_XMB_SHOW_HISTORY,
-                  xmb_show_history,
+                  &settings->bools.menu_content_show_history,
+                  MENU_ENUM_LABEL_CONTENT_SHOW_HISTORY,
+                  MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_HISTORY,
+                  content_show_history,
                   MENU_ENUM_LABEL_VALUE_OFF,
                   MENU_ENUM_LABEL_VALUE_ON,
                   &group_info,
@@ -5809,10 +5891,10 @@ static bool setting_append_list(
 #ifdef HAVE_NETWORKING
             CONFIG_BOOL(
                   list, list_info,
-                  &settings->bools.menu_xmb_show_netplay,
-                  MENU_ENUM_LABEL_XMB_SHOW_NETPLAY,
-                  MENU_ENUM_LABEL_VALUE_XMB_SHOW_NETPLAY,
-                  xmb_show_netplay,
+                  &settings->bools.menu_content_show_netplay,
+                  MENU_ENUM_LABEL_CONTENT_SHOW_NETPLAY,
+                  MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_NETPLAY,
+                  content_show_netplay,
                   MENU_ENUM_LABEL_VALUE_OFF,
                   MENU_ENUM_LABEL_VALUE_ON,
                   &group_info,
@@ -5826,10 +5908,10 @@ static bool setting_append_list(
 #ifdef HAVE_LIBRETRODB
             CONFIG_BOOL(
                   list, list_info,
-                  &settings->bools.menu_xmb_show_add,
-                  MENU_ENUM_LABEL_XMB_SHOW_ADD,
-                  MENU_ENUM_LABEL_VALUE_XMB_SHOW_ADD,
-                  xmb_show_add,
+                  &settings->bools.menu_content_show_add,
+                  MENU_ENUM_LABEL_CONTENT_SHOW_ADD,
+                  MENU_ENUM_LABEL_VALUE_CONTENT_SHOW_ADD,
+                  content_show_add,
                   MENU_ENUM_LABEL_VALUE_OFF,
                   MENU_ENUM_LABEL_VALUE_ON,
                   &group_info,
@@ -5840,14 +5922,12 @@ static bool setting_append_list(
                   SD_FLAG_NONE);
             settings_data_list_current_add_flags(list, list_info, SD_FLAG_LAKKA_ADVANCED);
 #endif
-         }
-
-#endif
 
 #ifdef HAVE_MATERIALUI
-         /* only MaterialUI uses these values, don't show them on other drivers */
-         if (string_is_equal_fast(settings->arrays.menu_driver, "glui", 4))
+         if (string_is_equal(settings->arrays.menu_driver, "glui"))
          {
+            /* only MaterialUI uses these values, don't show 
+             * them on other drivers. */
             CONFIG_BOOL(
                   list, list_info,
                   &settings->bools.menu_materialui_icons_enable,
@@ -5921,7 +6001,7 @@ static bool setting_append_list(
                general_read_handler,
                SD_FLAG_ADVANCED);
 
-         if (string_is_equal_fast(settings->arrays.menu_driver, "xmb", 3))
+         if (string_is_equal(settings->arrays.menu_driver, "xmb"))
          {
             CONFIG_UINT(
                   list, list_info,
@@ -6330,7 +6410,7 @@ static bool setting_append_list(
                general_read_handler,
                SD_FLAG_NONE);
 
-         if (string_is_not_equal_fast(ui_companion_driver_get_ident(), "null", 4))
+         if (string_is_not_equal(ui_companion_driver_get_ident(), "null"))
          {
             CONFIG_BOOL(
                   list, list_info,
@@ -6633,9 +6713,10 @@ static bool setting_append_list(
 
          {
 #if defined(HAVE_NETWORKING)
-#if defined(HAVE_NETWORK_CMD)
             unsigned user;
-#endif
+            char dev_req_label[64];
+            char dev_req_value[64];
+
             CONFIG_BOOL(
                   list, list_info,
                   &settings->bools.netplay_public_announce,
@@ -6665,6 +6746,21 @@ static bool setting_append_list(
                   general_write_handler,
                   general_read_handler,
                   SD_FLAG_NONE);
+
+            CONFIG_STRING(
+                  list, list_info,
+                  settings->arrays.netplay_mitm_server,
+                  sizeof(settings->arrays.netplay_mitm_server),
+                  MENU_ENUM_LABEL_NETPLAY_MITM_SERVER,
+                  MENU_ENUM_LABEL_VALUE_NETPLAY_MITM_SERVER,
+                  netplay_mitm_server,
+                  &group_info,
+                  &subgroup_info,
+                  parent_group,
+                  general_write_handler,
+                  general_read_handler);
+         (*list)[list_info->index - 1].get_string_representation =
+            &setting_get_string_representation_netplay_mitm_server;
 
             CONFIG_STRING(
                   list, list_info,
@@ -6843,21 +6939,55 @@ static bool setting_append_list(
                   SD_FLAG_NONE);
             settings_data_list_current_add_flags(list, list_info, SD_FLAG_ADVANCED);
 
-            CONFIG_BOOL(
+            CONFIG_UINT(
                   list, list_info,
-                  &settings->bools.netplay_swap_input,
-                  MENU_ENUM_LABEL_NETPLAY_CLIENT_SWAP_INPUT,
-                  MENU_ENUM_LABEL_VALUE_NETPLAY_CLIENT_SWAP_INPUT,
-                  netplay_client_swap_input,
-                  MENU_ENUM_LABEL_VALUE_OFF,
-                  MENU_ENUM_LABEL_VALUE_ON,
+                  &settings->uints.netplay_share_digital,
+                  MENU_ENUM_LABEL_NETPLAY_SHARE_DIGITAL,
+                  MENU_ENUM_LABEL_VALUE_NETPLAY_SHARE_DIGITAL,
+                  0,
                   &group_info,
                   &subgroup_info,
                   parent_group,
                   general_write_handler,
-                  general_read_handler,
-                  SD_FLAG_NONE);
-            settings_data_list_current_add_flags(list, list_info, SD_FLAG_ADVANCED);
+                  general_read_handler);
+            menu_settings_list_current_add_range(list, list_info, 0, RARCH_NETPLAY_SHARE_DIGITAL_LAST-1, 1, true, true);
+
+            CONFIG_UINT(
+                  list, list_info,
+                  &settings->uints.netplay_share_analog,
+                  MENU_ENUM_LABEL_NETPLAY_SHARE_ANALOG,
+                  MENU_ENUM_LABEL_VALUE_NETPLAY_SHARE_ANALOG,
+                  0,
+                  &group_info,
+                  &subgroup_info,
+                  parent_group,
+                  general_write_handler,
+                  general_read_handler);
+            menu_settings_list_current_add_range(list, list_info, 0, RARCH_NETPLAY_SHARE_ANALOG_LAST-1, 1, true, true);
+
+            for (user = 0; user < MAX_USERS; user++)
+            {
+               snprintf(dev_req_label, sizeof(dev_req_label),
+                     msg_hash_to_str(MENU_ENUM_LABEL_NETPLAY_REQUEST_DEVICE_I), user + 1);
+               snprintf(dev_req_value, sizeof(dev_req_value),
+                     msg_hash_to_str(MENU_ENUM_LABEL_VALUE_NETPLAY_REQUEST_DEVICE_I), user + 1);
+               CONFIG_BOOL_ALT(
+                     list, list_info,
+                     &settings->bools.netplay_request_devices[user],
+                     strdup(dev_req_label),
+                     strdup(dev_req_value),
+                     false,
+                     MENU_ENUM_LABEL_VALUE_NO,
+                     MENU_ENUM_LABEL_VALUE_YES,
+                     &group_info,
+                     &subgroup_info,
+                     parent_group,
+                     general_write_handler,
+                     general_read_handler,
+                     SD_FLAG_ADVANCED);
+               settings_data_list_current_add_free_flags(list, list_info, SD_FREE_FLAG_NAME | SD_FREE_FLAG_SHORT);
+               menu_settings_list_current_add_enum_idx(list, list_info, (enum msg_hash_enums)(MENU_ENUM_LABEL_NETPLAY_REQUEST_DEVICE_1 + user));
+            }
 
             END_SUB_GROUP(list, list_info, parent_group);
 
@@ -7425,7 +7555,7 @@ static bool setting_append_list(
                general_read_handler);
          (*list)[list_info->index - 1].action_start = directory_action_start_generic;
 
-         if (string_is_not_equal_fast(settings->arrays.record_driver, "null", 4))
+         if (string_is_not_equal(settings->arrays.record_driver, "null"))
          {
             CONFIG_DIR(
                   list, list_info,
@@ -7591,7 +7721,7 @@ static bool setting_append_list(
          START_SUB_GROUP(list, list_info, "State",
                &group_info, &subgroup_info, parent_group);
 
-         if (string_is_not_equal_fast(settings->arrays.camera_driver, "null", 4))
+         if (string_is_not_equal(settings->arrays.camera_driver, "null"))
          {
             CONFIG_BOOL(
                   list, list_info,
@@ -7609,7 +7739,7 @@ static bool setting_append_list(
                   SD_FLAG_NONE);
          }
 
-         if (string_is_not_equal_fast(settings->arrays.location_driver, "null", 4))
+         if (string_is_not_equal(settings->arrays.location_driver, "null"))
          {
             CONFIG_BOOL(
                   list, list_info,

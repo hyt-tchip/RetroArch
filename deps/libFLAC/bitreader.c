@@ -34,6 +34,8 @@
 #  include <config.h>
 #endif
 
+#include <retro_miscellaneous.h>
+
 #include <stdlib.h>
 #include <string.h>
 #include "private/bitmath.h"
@@ -116,7 +118,7 @@ struct FLAC__BitReader {
 
 static INLINE void crc16_update_word_(FLAC__BitReader *br, brword word)
 {
-	register unsigned crc = br->read_crc16;
+   unsigned crc = br->read_crc16;
 #if FLAC__BYTES_PER_WORD == 4
 	switch(br->crc16_align) {
 		case  0: crc = FLAC__CRC16_UPDATE((unsigned)(word >> 24), crc); /* fallthrough */
@@ -347,17 +349,17 @@ FLAC__uint16 FLAC__bitreader_get_read_crc16(FLAC__BitReader *br)
 	return br->read_crc16;
 }
 
-INLINE FLAC__bool FLAC__bitreader_is_consumed_byte_aligned(const FLAC__BitReader *br)
+FLAC__bool FLAC__bitreader_is_consumed_byte_aligned(const FLAC__BitReader *br)
 {
 	return ((br->consumed_bits & 7) == 0);
 }
 
-INLINE unsigned FLAC__bitreader_bits_left_for_byte_alignment(const FLAC__BitReader *br)
+unsigned FLAC__bitreader_bits_left_for_byte_alignment(const FLAC__BitReader *br)
 {
 	return 8 - (br->consumed_bits & 7);
 }
 
-INLINE unsigned FLAC__bitreader_get_input_bits_unconsumed(const FLAC__BitReader *br)
+unsigned FLAC__bitreader_get_input_bits_unconsumed(const FLAC__BitReader *br)
 {
 	return (br->words-br->consumed_words)*FLAC__BITS_PER_WORD + br->bytes*8 - br->consumed_bits;
 }
@@ -476,7 +478,7 @@ FLAC__bool FLAC__bitreader_read_raw_uint64(FLAC__BitReader *br, FLAC__uint64 *va
 	return true;
 }
 
-INLINE FLAC__bool FLAC__bitreader_read_uint32_little_endian(FLAC__BitReader *br, FLAC__uint32 *val)
+FLAC__bool FLAC__bitreader_read_uint32_little_endian(FLAC__BitReader *br, FLAC__uint32 *val)
 {
 	FLAC__uint32 x8, x32 = 0;
 
@@ -516,7 +518,7 @@ FLAC__bool FLAC__bitreader_skip_bits_no_crc(FLAC__BitReader *br, unsigned bits)
 		FLAC__uint32 x;
 
 		if(n != 0) {
-			m = flac_min(8-n, bits);
+			m = MIN(8-n, bits);
 			if(!FLAC__bitreader_read_raw_uint32(br, &x, m))
 				return false;
 			bits -= m;

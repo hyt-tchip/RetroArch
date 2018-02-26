@@ -124,12 +124,14 @@ struct command
 #endif
 };
 
+#if defined(HAVE_COMMAND) && defined(HAVE_CHEEVOS)
 static bool command_read_ram(const char *arg);
 static bool command_write_ram(const char *arg);
+#endif
 
 static const struct cmd_action_map action_map[] = {
    { "SET_SHADER",      command_set_shader,  "<shader path>" },
-#ifdef HAVE_CHEEVOS
+#if defined(HAVE_COMMAND) && defined(HAVE_CHEEVOS)
    { "READ_CORE_RAM",   command_read_ram,    "<address> <number of bytes>" },
    { "WRITE_CORE_RAM",  command_write_ram,   "<address> <byte1> <byte2> ..." },
 #endif
@@ -157,7 +159,6 @@ static const struct cmd_map map[] = {
    { "SCREENSHOT",             RARCH_SCREENSHOT },
    { "MUTE",                   RARCH_MUTE },
    { "OSK",                    RARCH_OSK },
-   { "NETPLAY_FLIP",           RARCH_NETPLAY_FLIP },
    { "NETPLAY_GAME_WATCH",     RARCH_NETPLAY_GAME_WATCH },
    { "SLOWMOTION",             RARCH_SLOWMOTION },
    { "VOLUME_UP",              RARCH_VOLUME_UP },
@@ -219,6 +220,7 @@ bool command_set_shader(const char *arg)
 {
    char msg[256];
    enum rarch_shader_type type = RARCH_SHADER_NONE;
+   struct video_shader      *shader  = menu_shader_get();
 
    switch (msg_hash_to_file_type(msg_hash_calculate(path_get_extension(arg))))
    {
@@ -244,12 +246,13 @@ bool command_set_shader(const char *arg)
          msg_hash_to_str(MSG_APPLYING_SHADER),
          arg);
 
-   return video_driver_set_shader(type, arg);
+   retroarch_set_shader_preset(arg);
+   return menu_shader_manager_set_preset(shader, type, arg);
 }
 
+#if defined(HAVE_COMMAND) && defined(HAVE_CHEEVOS)
 static bool command_read_ram(const char *arg)
 {
-#if defined(HAVE_COMMAND) && defined(HAVE_CHEEVOS)
    cheevos_var_t var;
    unsigned i;
    unsigned nbytes;
@@ -283,14 +286,10 @@ static bool command_read_ram(const char *arg)
    }
 
    return true;
-#else
-   return false;
-#endif
 }
 
 static bool command_write_ram(const char *arg)
 {
-#if defined(HAVE_COMMAND) && defined(HAVE_CHEEVOS)
    int i;
    cheevos_var_t var;
    unsigned nbytes   = 0;
@@ -311,10 +310,9 @@ static bool command_write_ram(const char *arg)
       return true;
    }
 
-#endif
-
    return false;
 }
+#endif
 
 static bool command_get_arg(const char *tok,
       const char **arg, unsigned *index)
@@ -355,28 +353,6 @@ static bool command_get_arg(const char *tok,
    }
 
    return false;
-}
-
-static void command_parse_sub_msg(command_t *handle, const char *tok)
-{
-   const char *arg = NULL;
-   unsigned index  = 0;
-
-   if (command_get_arg(tok, &arg, &index))
-   {
-      if (arg)
-      {
-         if (!action_map[index].action(arg))
-            RARCH_ERR("Command \"%s\" failed.\n", arg);
-      }
-      else
-         handle->state[map[index].id] = true;
-   }
-   else
-      RARCH_WARN("%s \"%s\" %s.\n",
-            msg_hash_to_str(MSG_UNRECOGNIZED_COMMAND),
-            tok,
-            msg_hash_to_str(MSG_RECEIVED));
 }
 
 #if defined(HAVE_NETWORKING) && defined(HAVE_NETWORK_CMD) && defined(HAVE_COMMAND)
@@ -434,6 +410,28 @@ static bool command_verify(const char *cmd)
 }
 
 #ifdef HAVE_COMMAND
+static void command_parse_sub_msg(command_t *handle, const char *tok)
+{
+   const char *arg = NULL;
+   unsigned index  = 0;
+
+   if (command_get_arg(tok, &arg, &index))
+   {
+      if (arg)
+      {
+         if (!action_map[index].action(arg))
+            RARCH_ERR("Command \"%s\" failed.\n", arg);
+      }
+      else
+         handle->state[map[index].id] = true;
+   }
+   else
+      RARCH_WARN("%s \"%s\" %s.\n",
+            msg_hash_to_str(MSG_UNRECOGNIZED_COMMAND),
+            tok,
+            msg_hash_to_str(MSG_RECEIVED));
+}
+
 static void command_parse_msg(command_t *handle, char *buf, enum cmd_source_t source)
 {
    char *save      = NULL;
@@ -1221,6 +1219,8 @@ static bool event_init_content(void)
    if (rarch_ctl(RARCH_CTL_IS_DUMMY_CORE, NULL))
       return true;
 
+   content_set_subsystem_info();
+
    if (!contentless)
       path_fill_names();
 
@@ -1299,31 +1299,13 @@ static void command_event_disable_overrides(void)
       return;
 
    /* reload the original config */
-
    config_unload_override();
    rarch_ctl(RARCH_CTL_UNSET_OVERRIDES_ACTIVE, NULL);
 }
 
 static void command_event_restore_default_shader_preset(void)
 {
-   if (!path_is_empty(RARCH_PATH_DEFAULT_SHADER_PRESET))
-   {
-      /* auto shader preset: reload the original shader */
-      settings_t *settings      = config_get_ptr();
-      const char *shader_preset = path_get(RARCH_PATH_DEFAULT_SHADER_PRESET);
-
-      if (!string_is_empty(shader_preset))
-      {
-         RARCH_LOG("%s %s\n",
-               msg_hash_to_str(MSG_RESTORING_DEFAULT_SHADER_PRESET_TO),
-               shader_preset);
-         strlcpy(settings->paths.path_shader,
-               shader_preset,
-               sizeof(settings->paths.path_shader));
-      }
-   }
-
-   path_clear(RARCH_PATH_DEFAULT_SHADER_PRESET);
+   retroarch_unset_shader_preset();
 }
 
 static void command_event_restore_remaps(void)
@@ -1422,29 +1404,37 @@ static bool command_event_save_core_config(void)
    bool found_path                 = false;
    bool overrides_active           = false;
    const char *core_path           = NULL;
-   char *config_dir                = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
-   char *config_name               = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
-   char *config_path               = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
+   char *config_name               = NULL;
+   char *config_path               = NULL;
+   char *config_dir                = NULL;
    size_t config_size              = PATH_MAX_LENGTH * sizeof(char);
    settings_t *settings            = config_get_ptr();
 
-   config_dir[0]  = config_name[0] =
-   config_path[0] = msg[0]         = '\0';
+   msg[0]                          = '\0';
 
-   if (!string_is_empty(settings->paths.directory_menu_config))
-      strlcpy(config_dir, settings->paths.directory_menu_config,
-            config_size);
+   if (settings && !string_is_empty(settings->paths.directory_menu_config))
+      config_dir = strdup(settings->paths.directory_menu_config);
    else if (!path_is_empty(RARCH_PATH_CONFIG)) /* Fallback */
+   {
+      config_dir                   = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
+      config_dir[0]                = '\0';
       fill_pathname_basedir(config_dir, path_get(RARCH_PATH_CONFIG),
             config_size);
-   else
+   }
+
+   if (string_is_empty(config_dir))
    {
       runloop_msg_queue_push(msg_hash_to_str(MSG_CONFIG_DIRECTORY_NOT_SET), 1, 180, true);
       RARCH_ERR("[Config]: %s\n", msg_hash_to_str(MSG_CONFIG_DIRECTORY_NOT_SET));
-      goto error;
+      free (config_dir);
+      return false;
    }
 
-   core_path = path_get(RARCH_PATH_CORE);
+   core_path                       = path_get(RARCH_PATH_CORE);
+   config_name                     = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
+   config_path                     = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
+   config_name[0]                  = '\0';
+   config_path[0]                  = '\0';
 
    /* Infer file name based on libretro core. */
    if (!string_is_empty(core_path) && filestream_exists(core_path))
@@ -1518,12 +1508,6 @@ static bool command_event_save_core_config(void)
    free(config_name);
    free(config_path);
    return ret;
-
-error:
-   free(config_dir);
-   free(config_name);
-   free(config_path);
-   return false;
 }
 
 /**
@@ -1769,6 +1753,7 @@ void command_playlist_update_write(
  **/
 bool command_event(enum event_command cmd, void *data)
 {
+   settings_t *settings      = config_get_ptr();
    bool boolean              = false;
 
    switch (cmd)
@@ -1962,15 +1947,25 @@ bool command_event(enum event_command cmd, void *data)
       case CMD_EVENT_REINIT_FROM_TOGGLE:
          retroarch_unset_forced_fullscreen();
       case CMD_EVENT_REINIT:
-         video_driver_reinit();
-         /* Poll input to avoid possibly stale data to corrupt things. */
-         input_driver_poll();
-         command_event(CMD_EVENT_GAME_FOCUS_TOGGLE, (void*)(intptr_t)-1);
+         {
+            video_driver_reinit();
+            {
+               const input_driver_t *input_drv = input_get_ptr();
+               void *input_data                = input_get_data();
+               /* Poll input to avoid possibly stale data to corrupt things. */
+               if (input_drv && input_drv->poll)
+                  input_drv->poll(input_data);
+            }
+            command_event(CMD_EVENT_GAME_FOCUS_TOGGLE, (void*)(intptr_t)-1);
 #ifdef HAVE_MENU
-         menu_display_set_framebuffer_dirty_flag();
-         if (menu_driver_is_alive())
-            command_event(CMD_EVENT_VIDEO_SET_BLOCKING_STATE, NULL);
+            menu_display_set_framebuffer_dirty_flag();
+            if (settings->bools.video_fullscreen)
+               video_driver_hide_mouse();
+
+            if (menu_driver_is_alive())
+               command_event(CMD_EVENT_VIDEO_SET_BLOCKING_STATE, NULL);
 #endif
+         }
          break;
       case CMD_EVENT_CHEATS_DEINIT:
          cheat_manager_state_free();
@@ -2551,9 +2546,6 @@ TODO: Add a setting for these tweaks */
 #endif
          }
          break;
-      case CMD_EVENT_NETPLAY_FLIP_PLAYERS:
-         netplay_driver_ctl(RARCH_NETPLAY_CTL_FLIP_PLAYERS, NULL);
-         break;
       case CMD_EVENT_NETPLAY_GAME_WATCH:
          netplay_driver_ctl(RARCH_NETPLAY_CTL_GAME_WATCH, NULL);
          break;
@@ -2564,7 +2556,6 @@ TODO: Add a setting for these tweaks */
       case CMD_EVENT_NETPLAY_INIT:
       case CMD_EVENT_NETPLAY_INIT_DIRECT:
       case CMD_EVENT_NETPLAY_INIT_DIRECT_DEFERRED:
-      case CMD_EVENT_NETPLAY_FLIP_PLAYERS:
       case CMD_EVENT_NETPLAY_GAME_WATCH:
          return false;
 #endif

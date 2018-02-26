@@ -27,6 +27,7 @@
 #include <string/stdstring.h>
 
 #include "../drivers/d3d.h"
+#include "../common/d3d_common.h"
 #include "../common/win32_common.h"
 
 #include "../../configuration.h"
@@ -35,8 +36,10 @@
 
 #ifdef _MSC_VER
 #ifndef _XBOX
+#ifndef HAVE_DYLIB
 #pragma comment( lib, "d3d9" )
 #pragma comment( lib, "d3dx9" )
+#endif
 #ifdef HAVE_CG
 #pragma comment( lib, "cgd3d9" )
 #endif
@@ -57,7 +60,8 @@ static bool widescreen_mode = false;
 
 void *dinput;
 
-static bool gfx_ctx_d3d_set_resize(void *data, unsigned new_width, unsigned new_height)
+static bool gfx_ctx_d3d_set_resize(void *data,
+      unsigned new_width, unsigned new_height)
 {
    d3d_video_t *d3d      = (d3d_video_t*)video_driver_get_ptr(false);
 
@@ -65,7 +69,8 @@ static bool gfx_ctx_d3d_set_resize(void *data, unsigned new_width, unsigned new_
       return false;
 
    /* No changes? */
-   if (new_width == d3d->video_info.width && new_height == d3d->video_info.height)
+   if (     (new_width  == d3d->video_info.width)
+         && (new_height == d3d->video_info.height))
       return false;
 
    RARCH_LOG("[D3D]: Resize %ux%u.\n", new_width, new_height);
@@ -79,9 +84,8 @@ static bool gfx_ctx_d3d_set_resize(void *data, unsigned new_width, unsigned new_
 static void gfx_ctx_d3d_swap_buffers(void *data, void *data2)
 {
    d3d_video_t      *d3d = (d3d_video_t*)data;
-   LPDIRECT3DDEVICE d3dr = (LPDIRECT3DDEVICE)d3d->dev;
-
-   d3d_swap(d3d, d3dr);
+   if (d3d)
+      d3d_swap(d3d, d3d->dev);
 }
 
 static void gfx_ctx_d3d_update_title(void *data, void *data2)
@@ -174,14 +178,22 @@ static bool gfx_ctx_d3d_bind_api(void *data,
    (void)data;
    (void)major;
    (void)minor;
-   (void)api;
 
-#if defined(HAVE_D3D8)
-   return api == GFX_CTX_DIRECT3D8_API;
-#else
-   /* As long as we don't have a D3D11 implementation, we default to this */
-   return api == GFX_CTX_DIRECT3D9_API;
-#endif
+   switch (api)
+   {
+      case GFX_CTX_DIRECT3D8_API:
+         if (api == GFX_CTX_DIRECT3D8_API)
+            return true;
+         break;
+      case GFX_CTX_DIRECT3D9_API:
+         if (api == GFX_CTX_DIRECT3D9_API)
+            return true;
+         break;
+      default:
+         break;
+   }
+
+   return false;
 }
 
 static void *gfx_ctx_d3d_init(video_frame_info_t *video_info, void *video_driver)
@@ -211,7 +223,7 @@ static void gfx_ctx_d3d_input_driver(void *data,
 
 #if _WIN32_WINNT >= 0x0501
    /* winraw only available since XP */
-   if (string_is_equal_fast(settings->arrays.input_driver, "raw", 4))
+   if (string_is_equal(settings->arrays.input_driver, "raw"))
    {
       *input_data = input_winraw.init(name);
       if (*input_data)
@@ -275,62 +287,64 @@ static void gfx_ctx_d3d_get_video_size(void *data,
 
    widescreen_mode = video_mode.fIsWideScreen;
 #elif defined(_XBOX1)
-   DWORD video_mode = XGetVideoFlags();
-
-   *width  = 640;
-   *height = 480;
-
-   widescreen_mode = false;
-
-   /* Only valid in PAL mode, not valid for HDTV modes! */
-
-   if(XGetVideoStandard() == XC_VIDEO_STANDARD_PAL_I)
    {
-      /* Check for 16:9 mode (PAL REGION) */
-      if(video_mode & XC_VIDEO_FLAGS_WIDESCREEN)
+      DWORD video_mode = XGetVideoFlags();
+
+      *width  = 640;
+      *height = 480;
+
+      widescreen_mode = false;
+
+      /* Only valid in PAL mode, not valid for HDTV modes! */
+
+      if(XGetVideoStandard() == XC_VIDEO_STANDARD_PAL_I)
       {
-         *width = 720;
-         //60 Hz, 720x480i
-         if(video_mode & XC_VIDEO_FLAGS_PAL_60Hz)
+         /* Check for 16:9 mode (PAL REGION) */
+         if(video_mode & XC_VIDEO_FLAGS_WIDESCREEN)
+         {
+            *width = 720;
+            //60 Hz, 720x480i
+            if(video_mode & XC_VIDEO_FLAGS_PAL_60Hz)
+               *height = 480;
+            else //50 Hz, 720x576i
+               *height = 576;
+            widescreen_mode = true;
+         }
+      }
+      else
+      {
+         /* Check for 16:9 mode (NTSC REGIONS) */
+         if(video_mode & XC_VIDEO_FLAGS_WIDESCREEN)
+         {
+            *width = 720;
             *height = 480;
-         else //50 Hz, 720x576i
-            *height = 576;
-         widescreen_mode = true;
+            widescreen_mode = true;
+         }
       }
-   }
-   else
-   {
-      /* Check for 16:9 mode (NTSC REGIONS) */
-      if(video_mode & XC_VIDEO_FLAGS_WIDESCREEN)
-      {
-         *width = 720;
-         *height = 480;
-         widescreen_mode = true;
-      }
-   }
 
-   if(XGetAVPack() == XC_AV_PACK_HDTV)
-   {
-      if(video_mode & XC_VIDEO_FLAGS_HDTV_480p)
+      if(XGetAVPack() == XC_AV_PACK_HDTV)
       {
-         *width = 640;
-         *height  = 480;
-         widescreen_mode = false;
-         d3d->resolution_hd_enable = true;
-      }
-      else if(video_mode & XC_VIDEO_FLAGS_HDTV_720p)
-      {
-         *width = 1280;
-         *height  = 720;
-         widescreen_mode = true;
-         d3d->resolution_hd_enable = true;
-      }
-      else if(video_mode & XC_VIDEO_FLAGS_HDTV_1080i)
-      {
-         *width = 1920;
-         *height  = 1080;
-         widescreen_mode = true;
-         d3d->resolution_hd_enable = true;
+         if(video_mode & XC_VIDEO_FLAGS_HDTV_480p)
+         {
+            *width = 640;
+            *height  = 480;
+            widescreen_mode = false;
+            d3d->resolution_hd_enable = true;
+         }
+         else if(video_mode & XC_VIDEO_FLAGS_HDTV_720p)
+         {
+            *width = 1280;
+            *height  = 720;
+            widescreen_mode = true;
+            d3d->resolution_hd_enable = true;
+         }
+         else if(video_mode & XC_VIDEO_FLAGS_HDTV_1080i)
+         {
+            *width = 1920;
+            *height  = 1080;
+            widescreen_mode = true;
+            d3d->resolution_hd_enable = true;
+         }
       }
    }
 #endif

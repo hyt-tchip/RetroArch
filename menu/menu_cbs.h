@@ -84,6 +84,8 @@ enum
    ACTION_OK_DL_REMAP_FILE,
    ACTION_OK_DL_RECORD_CONFIGFILE,
    ACTION_OK_DL_DISK_IMAGE_APPEND_LIST,
+   ACTION_OK_DL_SUBSYSTEM_ADD_LIST,
+   ACTION_OK_DL_SUBSYSTEM_LOAD,
    ACTION_OK_DL_PLAYLIST_COLLECTION,
    ACTION_OK_DL_CONTENT_COLLECTION_LIST,
    ACTION_OK_DL_CHEAT_FILE,
@@ -140,9 +142,6 @@ extern unsigned rpl_entry_selection_ptr;
 int action_refresh_default(file_list_t *list, file_list_t *menu_list);
 
 int shader_action_parameter_right(unsigned type, const char *label, bool wraparound);
-
-int shader_action_parameter_preset_right(unsigned type, const char *label,
-      bool wraparound);
 
 int generic_action_ok_displaylist_push(const char *path, const char *new_path,
       const char *label, unsigned type, size_t idx, size_t entry_idx,

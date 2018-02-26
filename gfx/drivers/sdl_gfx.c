@@ -466,7 +466,6 @@ static void sdl_apply_state_changes(void *data)
    (void)data;
 }
 
-#ifdef HAVE_MENU
 static void sdl_set_texture_frame(void *data, const void *frame, bool rgb32,
       unsigned width, unsigned height, float alpha)
 {
@@ -499,13 +498,13 @@ static void sdl_set_texture_enable(void *data, bool state, bool full_screen)
    vid->menu.active = state;
 }
 
+
 static void sdl_show_mouse(void *data, bool state)
 {
    (void)data;
 
    SDL_ShowCursor(state);
 }
-#endif
 
 static void sdl_grab_mouse_toggle(void *data)
 {
@@ -530,20 +529,14 @@ static const video_poke_interface_t sdl_poke_interface = {
    NULL, /* get_proc_address */
    sdl_set_aspect_ratio,
    sdl_apply_state_changes,
-#ifdef HAVE_MENU
    sdl_set_texture_frame,
-#endif
-#ifdef HAVE_MENU
    sdl_set_texture_enable,
    NULL,
    sdl_show_mouse,
-#else
-   NULL,
-   NULL,
-   NULL,
-#endif
    sdl_grab_mouse_toggle,
-   NULL
+   NULL,                         /* get_current_shader */
+   NULL,                         /* get_current_software_framebuffer */
+   NULL                          /* get_hw_render_interface */
 };
 
 static void sdl_get_poke_interface(void *data, const video_poke_interface_t **iface)

@@ -1133,14 +1133,14 @@ static const video_poke_interface_t ctr_poke_interface = {
    NULL,
    ctr_set_aspect_ratio,
    ctr_apply_state_changes,
-#ifdef HAVE_MENU
    ctr_set_texture_frame,
    ctr_set_texture_enable,
    ctr_set_osd_msg,
-#endif
-   NULL,
-   NULL,
-   NULL
+   NULL,                   /* show_mouse */
+   NULL,                   /* grab_mouse_toggle */
+   NULL,                   /* get_current_shader */
+   NULL,                   /* get_current_software_framebuffer */
+   NULL                    /* get_hw_render_interface */
 };
 
 static void ctr_get_poke_interface(void* data,

@@ -37,6 +37,7 @@
 #include "../../managers/cheat_manager.h"
 #include "../../file_path_special.h"
 #include "../../retroarch.h"
+#include "../../network/netplay/netplay.h"
 
 #ifndef BIND_ACTION_LEFT
 #define BIND_ACTION_LEFT(cbs, name) \
@@ -59,33 +60,25 @@ static int generic_shader_action_parameter_left(
    return 0;
 }
 
-static int shader_action_parameter_left(unsigned type, const char *label,
-      bool wraparound)
+static int shader_action_parameter_left(unsigned type, const char *label, bool wraparound)
 {
    video_shader_ctx_t shader_info;
    struct video_shader_parameter *param = NULL;
 
    video_shader_driver_get_current_shader(&shader_info);
 
-   param = &shader_info.data->parameters[type
-      - MENU_SETTINGS_SHADER_PARAMETER_0];
+   param = &shader_info.data->parameters[type - MENU_SETTINGS_SHADER_PARAMETER_0];
    if (!param)
-      return 0;
-   return generic_shader_action_parameter_left(param,
-         type, label, wraparound);
+      return menu_cbs_exit();
+   generic_shader_action_parameter_left(param, type, label, wraparound);
+
+   param = menu_shader_manager_get_parameters(
+         type - MENU_SETTINGS_SHADER_PARAMETER_0);
+   if (!param)
+      return menu_cbs_exit();
+   return generic_shader_action_parameter_left(param, type, label, wraparound);
 }
 
-static int shader_action_parameter_preset_left(unsigned type,
-      const char *label,
-      bool wraparound)
-{
-   struct video_shader_parameter *param = menu_shader_manager_get_parameters(
-         type - MENU_SETTINGS_SHADER_PRESET_PARAMETER_0);
-   if (!param)
-      return 0;
-   return generic_shader_action_parameter_left(param,
-         type, label, wraparound);
-}
 #endif
 
 static int action_left_cheat(unsigned type, const char *label,
@@ -324,6 +317,52 @@ static int action_left_shader_num_passes(unsigned type, const char *label,
    return 0;
 }
 
+static int action_left_netplay_mitm_server(unsigned type, const char *label,
+      bool wraparound)
+{
+   settings_t *settings = config_get_ptr();
+   int i;
+   bool found = false;
+   int list_len = ARRAY_SIZE(netplay_mitm_server_list);
+
+   for (i = 0; i < list_len; i++)
+   {
+      /* find the currently selected server in the list */
+      if (string_is_equal(settings->arrays.netplay_mitm_server, netplay_mitm_server_list[i].name))
+      {
+         /* move to the previous one in the list, wrap around if necessary */
+         if (i - 1 >= 0)
+         {
+            found = true;
+            strlcpy(settings->arrays.netplay_mitm_server, netplay_mitm_server_list[i - 1].name, sizeof(settings->arrays.netplay_mitm_server));
+            break;
+         }
+         else if (wraparound)
+         {
+            found = true;
+            strlcpy(settings->arrays.netplay_mitm_server, netplay_mitm_server_list[list_len - 1].name, sizeof(settings->arrays.netplay_mitm_server));
+            break;
+         }
+      }
+   }
+
+   if (!found)
+   {
+      /* current entry was invalid, go back to the end */
+      strlcpy(settings->arrays.netplay_mitm_server, netplay_mitm_server_list[list_len - 1].name, sizeof(settings->arrays.netplay_mitm_server));
+   }
+
+   return 0;
+}
+
+static int action_left_shader_watch_for_changes(unsigned type, const char *label,
+      bool wraparound)
+{
+   settings_t *settings = config_get_ptr();
+   settings->bools.video_shader_watch_files = !settings->bools.video_shader_watch_files;
+   return 0;
+}
+
 static int action_left_video_resolution(unsigned type, const char *label,
       bool wraparound)
 {
@@ -482,6 +521,12 @@ static int menu_cbs_init_bind_left_compare_label(menu_file_list_cbs_t *cbs,
             case MENU_ENUM_LABEL_VIDEO_SHADER_DEFAULT_FILTER:
                BIND_ACTION_LEFT(cbs, action_left_shader_filter_default);
                break;
+            case MENU_ENUM_LABEL_NETPLAY_MITM_SERVER:
+               BIND_ACTION_LEFT(cbs, action_left_netplay_mitm_server);
+               break;
+            case MENU_ENUM_LABEL_SHADER_WATCH_FOR_CHANGES:
+               BIND_ACTION_LEFT(cbs, action_left_shader_watch_for_changes);
+               break;
             case MENU_ENUM_LABEL_VIDEO_SHADER_NUM_PASSES:
                BIND_ACTION_LEFT(cbs, action_left_shader_num_passes);
                break;
@@ -564,7 +609,7 @@ static int menu_cbs_init_bind_left_compare_type(menu_file_list_cbs_t *cbs,
    else if (type >= MENU_SETTINGS_SHADER_PRESET_PARAMETER_0
          && type <= MENU_SETTINGS_SHADER_PRESET_PARAMETER_LAST)
    {
-      BIND_ACTION_LEFT(cbs, shader_action_parameter_preset_left);
+      BIND_ACTION_LEFT(cbs, shader_action_parameter_left);
    }
 #endif
    else if (type >= MENU_SETTINGS_INPUT_DESC_BEGIN

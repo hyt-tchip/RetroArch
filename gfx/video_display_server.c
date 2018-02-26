@@ -27,6 +27,8 @@ void* video_display_server_init(void)
 {
    enum rarch_display_type type = video_driver_display_type_get();
 
+   video_display_server_destroy();
+
    switch (type)
    {
       case RARCH_DISPLAY_WIN32:
@@ -46,17 +48,36 @@ void* video_display_server_init(void)
 
    current_display_server_data = current_display_server->init();
 
-   RARCH_LOG("[Video]: Found display server: %s\n", current_display_server->ident);
+   RARCH_LOG("[Video]: Found display server: %s\n",
+		   current_display_server->ident);
 
    return current_display_server_data;
 }
 
 void video_display_server_destroy(void)
 {
-
+   if (current_display_server && current_display_server->destroy)
+      if (current_display_server_data)
+         current_display_server->destroy(current_display_server_data);
 }
 
 bool video_display_server_set_window_opacity(unsigned opacity)
 {
-   return current_display_server->set_window_opacity(current_display_server_data, opacity);
+   if (current_display_server && current_display_server->set_window_opacity)
+      return current_display_server->set_window_opacity(current_display_server_data, opacity);
+   return false;
+}
+
+bool video_display_server_set_window_progress(int progress, bool finished)
+{
+   if (current_display_server && current_display_server->set_window_progress)
+      return current_display_server->set_window_progress(current_display_server_data, progress, finished);
+   return false;
+}
+
+bool video_display_server_set_window_decorations(bool on)
+{
+   if (current_display_server && current_display_server->set_window_decorations)
+      return current_display_server->set_window_decorations(current_display_server_data, on);
+   return false;
 }

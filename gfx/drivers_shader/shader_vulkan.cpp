@@ -15,7 +15,7 @@
  */
 
 #include "shader_vulkan.h"
-#include "glslang_util.hpp"
+#include "glslang_util.h"
 #include <vector>
 #include <memory>
 #include <functional>
@@ -28,7 +28,7 @@
 #include <formats/image.h>
 #include <retro_miscellaneous.h>
 
-#include "slang_reflection.hpp"
+#include "slang_reflection.h"
 
 #include "../video_driver.h"
 #include "../../verbosity.h"
@@ -863,8 +863,8 @@ bool vulkan_filter_chain::init_feedback()
    return true;
 }
 
-template <typename M, typename P>
-static bool set_unique_map(M &m, const string &name, const P &p)
+template <typename P>
+static bool vk_shader_set_unique_map(unordered_map<string, P> &m, const string &name, const P &p)
 {
    auto itr = m.find(name);
    if (itr != end(m))
@@ -892,19 +892,19 @@ bool vulkan_filter_chain::init_alias()
 
       unsigned i = &pass - passes.data();
 
-      if (!set_unique_map(common.texture_semantic_map, name,
+      if (!vk_shader_set_unique_map(common.texture_semantic_map, name,
                slang_texture_semantic_map{ SLANG_TEXTURE_SEMANTIC_PASS_OUTPUT, i }))
          return false;
 
-      if (!set_unique_map(common.texture_semantic_uniform_map, name + "Size",
+      if (!vk_shader_set_unique_map(common.texture_semantic_uniform_map, name + "Size",
                slang_texture_semantic_map{ SLANG_TEXTURE_SEMANTIC_PASS_OUTPUT, i }))
          return false;
 
-      if (!set_unique_map(common.texture_semantic_map, name + "Feedback",
+      if (!vk_shader_set_unique_map(common.texture_semantic_map, name + "Feedback",
                slang_texture_semantic_map{ SLANG_TEXTURE_SEMANTIC_PASS_FEEDBACK, i }))
          return false;
 
-      if (!set_unique_map(common.texture_semantic_uniform_map, name + "FeedbackSize",
+      if (!vk_shader_set_unique_map(common.texture_semantic_uniform_map, name + "FeedbackSize",
                slang_texture_semantic_map{ SLANG_TEXTURE_SEMANTIC_PASS_FEEDBACK, i }))
          return false;
    }
@@ -912,11 +912,11 @@ bool vulkan_filter_chain::init_alias()
    for (auto &lut : common.luts)
    {
       unsigned i = &lut - common.luts.data();
-      if (!set_unique_map(common.texture_semantic_map, lut->get_id(),
+      if (!vk_shader_set_unique_map(common.texture_semantic_map, lut->get_id(),
                slang_texture_semantic_map{ SLANG_TEXTURE_SEMANTIC_USER, i }))
          return false;
 
-      if (!set_unique_map(common.texture_semantic_uniform_map, lut->get_id() + "Size",
+      if (!vk_shader_set_unique_map(common.texture_semantic_uniform_map, lut->get_id() + "Size",
                slang_texture_semantic_map{ SLANG_TEXTURE_SEMANTIC_USER, i }))
          return false;
    }
@@ -1757,7 +1757,7 @@ bool Pass::build()
 
    for (auto &param : parameters)
    {
-      if (!set_unique_map(semantic_map, param.id,
+      if (!vk_shader_set_unique_map(semantic_map, param.id,
                slang_semantic_map{ SLANG_SEMANTIC_FLOAT_PARAMETER, j }))
          return false;
       j++;

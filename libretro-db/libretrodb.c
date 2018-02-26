@@ -143,7 +143,7 @@ int libretrodb_create(RFILE *fd, libretrodb_value_provider value_provider,
    struct rmsgpack_dom_value item;
    uint64_t item_count        = 0;
    libretrodb_header_t header = {{0}};
-   ssize_t root = filestream_seek(fd, 0, RETRO_VFS_SEEK_POSITION_CURRENT);
+   ssize_t root = filestream_tell(fd);
 
    memcpy(header.magic_number, MAGIC_NUMBER, sizeof(MAGIC_NUMBER)-1);
 
@@ -230,7 +230,7 @@ int libretrodb_open(const char *path, libretrodb_t *db)
       free(db->path);
 
    db->path  = strdup(path);
-   db->root  = filestream_seek(fd, 0, RETRO_VFS_SEEK_POSITION_CURRENT);
+   db->root  = filestream_tell(fd);
 
    if ((rv = (int)filestream_read(fd, &header, sizeof(header))) == -1)
    {
@@ -255,8 +255,7 @@ int libretrodb_open(const char *path, libretrodb_t *db)
    }
 
    db->count              = md.count;
-   db->first_index_offset = filestream_seek(fd, 0,
-         RETRO_VFS_SEEK_POSITION_CURRENT);
+   db->first_index_offset = filestream_tell(fd);
    db->fd                 = fd;
    return 0;
 
@@ -269,12 +268,12 @@ error:
 static int libretrodb_find_index(libretrodb_t *db, const char *index_name,
       libretrodb_index_t *idx)
 {
-   ssize_t eof    = filestream_seek(db->fd, 0,
-         RETRO_VFS_SEEK_POSITION_END);
+   ssize_t eof    = filestream_get_size(db->fd);
    ssize_t offset = filestream_seek(db->fd,
          (ssize_t)db->first_index_offset,
          RETRO_VFS_SEEK_POSITION_START);
 
+   /* TODO: this should use filestream_eof instead */
    while (offset < eof)
    {
       libretrodb_read_index_header(db->fd, idx);
@@ -282,8 +281,9 @@ static int libretrodb_find_index(libretrodb_t *db, const char *index_name,
       if (strncmp(index_name, idx->name, strlen(idx->name)) == 0)
          return 0;
 
-      offset = filestream_seek(db->fd, (ssize_t)idx->next,
+      filestream_seek(db->fd, (ssize_t)idx->next,
             RETRO_VFS_SEEK_POSITION_CURRENT);
+      offset = filestream_tell(db->fd);
    }
 
    return -1;
@@ -444,7 +444,7 @@ int libretrodb_cursor_open(libretrodb_t *db, libretrodb_cursor_t *cursor,
 
    fd = filestream_open(db->path,
          RETRO_VFS_FILE_ACCESS_READ,
-         RETRO_VFS_FILE_ACCESS_HINT_FREQUENT_ACCESS);
+         RETRO_VFS_FILE_ACCESS_HINT_NONE);
 
    if (!fd)
       return -errno;
@@ -474,8 +474,7 @@ static int node_iter(void *value, void *ctx)
 
 static uint64_t libretrodb_tell(libretrodb_t *db)
 {
-   return filestream_seek(db->fd, 0,
-         RETRO_VFS_SEEK_POSITION_CURRENT);
+   return filestream_tell(db->fd);
 }
 
 static int node_compare(const void *a, const void *b, void *ctx)
@@ -490,7 +489,6 @@ int libretrodb_create_index(libretrodb_t *db,
    struct rmsgpack_dom_value key;
    libretrodb_index_t idx;
    struct rmsgpack_dom_value item;
-   uint64_t idx_header_offset       = 0;
    libretrodb_cursor_t cur          = {0};
    struct rmsgpack_dom_value *field = NULL;
    void *buff                       = NULL;
@@ -566,10 +564,7 @@ int libretrodb_create_index(libretrodb_t *db,
       item_loc = libretrodb_tell(db);
    }
 
-   idx_header_offset = filestream_seek(db->fd, 0,
-         RETRO_VFS_SEEK_POSITION_END);
-
-   (void)idx_header_offset;
+   filestream_seek(db->fd, 0, RETRO_VFS_SEEK_POSITION_END);
 
    strncpy(idx.name, name, 50);
 

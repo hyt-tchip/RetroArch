@@ -97,9 +97,13 @@ enum gfx_ctx_api
    GFX_CTX_OPENGL_ES_API,
    GFX_CTX_DIRECT3D8_API,
    GFX_CTX_DIRECT3D9_API,
+   GFX_CTX_DIRECT3D10_API,
+   GFX_CTX_DIRECT3D11_API,
+   GFX_CTX_DIRECT3D12_API,
    GFX_CTX_OPENVG_API,
    GFX_CTX_VULKAN_API,
-   GFX_CTX_GDI_API
+   GFX_CTX_GDI_API,
+   GFX_CTX_GX2_API
 };
 
 enum display_metric_types
@@ -467,15 +471,12 @@ typedef struct video_frame_info
    bool (*cb_set_resize)(void*, unsigned, unsigned);
 
    void (*cb_shader_use)(void *data, void *shader_data, unsigned index, bool set_active);
-#if 0
-   bool (*cb_set_coords)(void *handle_data,
-         void *shader_data, const struct video_coords *coords);
-#endif
    bool (*cb_set_mvp)(void *data, void *shader_data,
          const void *mat_data);
 
    void *context_data;
    void *shader_data;
+   void *userdata;
 } video_frame_info_t;
 
 typedef void (*update_window_title_cb)(void*, void*);
@@ -698,11 +699,9 @@ typedef struct video_poke_interface
    void (*set_aspect_ratio)(void *data, unsigned aspectratio_index);
    void (*apply_state_changes)(void *data);
 
-#ifdef HAVE_MENU
    /* Update texture. */
    void (*set_texture_frame)(void *data, const void *frame, bool rgb32,
          unsigned width, unsigned height, float alpha);
-#endif
    /* Enable or disable rendering. */
    void (*set_texture_enable)(void *data, bool enable, bool full_screen);
    void (*set_osd_msg)(void *data, video_frame_info_t *video_info,
@@ -804,12 +803,8 @@ typedef struct video_driver
 
 typedef struct d3d_renderchain_driver
 {
-   void (*set_mvp)(void *chain_data,
-         void *data, unsigned vp_width,
-         unsigned vp_height, unsigned rotation);
    void (*chain_free)(void *data);
    void *(*chain_new)(void);
-   bool (*reinit)(void *data, const void *info_data);
    bool (*init)(void *data,
          const void *video_info_data,
          void *dev_data,
@@ -940,6 +935,7 @@ void video_driver_free(void);
 void video_driver_free_hw_context(void);
 void video_driver_monitor_reset(void);
 void video_driver_set_aspect_ratio(void);
+void video_driver_update_viewport(struct video_viewport* vp, bool force_full, bool keep_aspect);
 void video_driver_show_mouse(void);
 void video_driver_hide_mouse(void);
 void video_driver_set_nonblock_state(bool toggle);
@@ -1321,14 +1317,6 @@ bool video_shader_driver_compile_program(struct shader_program_info *program_inf
 
 bool video_shader_driver_wrap_type(video_shader_ctx_wrap_t *wrap);
 
-bool renderchain_d3d_init_first(
-      const d3d_renderchain_driver_t **renderchain_driver,
-      void **renderchain_handle);
-
-bool renderchain_gl_init_first(
-      const gl_renderchain_driver_t **renderchain_driver,
-      void **renderchain_handle);
-
 extern bool (*video_driver_cb_has_focus)(void);
 
 extern shader_backend_t *current_shader;
@@ -1339,7 +1327,12 @@ extern video_driver_t video_vulkan;
 extern video_driver_t video_psp1;
 extern video_driver_t video_vita2d;
 extern video_driver_t video_ctr;
-extern video_driver_t video_d3d;
+extern video_driver_t video_switch;
+extern video_driver_t video_d3d8;
+extern video_driver_t video_d3d9;
+extern video_driver_t video_d3d10;
+extern video_driver_t video_d3d11;
+extern video_driver_t video_d3d12;
 extern video_driver_t video_gx;
 extern video_driver_t video_wiiu;
 extern video_driver_t video_xenon360;
@@ -1385,13 +1378,6 @@ extern const shader_backend_t gl_glsl_backend;
 extern const shader_backend_t hlsl_backend;
 extern const shader_backend_t gl_cg_backend;
 extern const shader_backend_t shader_null_backend;
-
-extern d3d_renderchain_driver_t d3d8_renderchain;
-extern d3d_renderchain_driver_t cg_d3d9_renderchain;
-extern d3d_renderchain_driver_t hlsl_d3d9_renderchain;
-extern d3d_renderchain_driver_t null_d3d_renderchain;
-
-extern gl_renderchain_driver_t gl2_renderchain;
 
 RETRO_END_DECLS
 

@@ -29,30 +29,30 @@
 #include "../../gfx/common/win32_common.h"
 #endif
 
-static void *menu_display_gdi_get_default_mvp(void)
+static void *menu_display_gdi_get_default_mvp(video_frame_info_t *video_info)
 {
    return NULL;
 }
 
-static void menu_display_gdi_blend_begin(void)
+static void menu_display_gdi_blend_begin(video_frame_info_t *video_info)
 {
 }
 
-static void menu_display_gdi_blend_end(void)
+static void menu_display_gdi_blend_end(video_frame_info_t *video_info)
 {
 }
 
-static void menu_display_gdi_draw(void *data)
-{
-   (void)data;
-}
-
-static void menu_display_gdi_draw_pipeline(void *data)
+static void menu_display_gdi_draw(void *data, video_frame_info_t *video_info)
 {
    (void)data;
 }
 
-static void menu_display_gdi_viewport(void *data)
+static void menu_display_gdi_draw_pipeline(void *data, video_frame_info_t *video_info)
+{
+   (void)data;
+}
+
+static void menu_display_gdi_viewport(void *data, video_frame_info_t *video_info)
 {
    (void)data;
 }
@@ -73,7 +73,9 @@ static void menu_display_gdi_restore_clear_color(void)
    ReleaseDC(hwnd, hdc);*/
 }
 
-static void menu_display_gdi_clear_color(menu_display_ctx_clearcolor_t *clearcolor)
+static void menu_display_gdi_clear_color(
+      menu_display_ctx_clearcolor_t *clearcolor,
+      video_frame_info_t *video_info)
 {
    (void)clearcolor;
 

@@ -100,7 +100,9 @@ static unsigned         win32_minor       = 0;
 static unsigned         win32_interval    = 0;
 static enum gfx_ctx_api win32_api         = GFX_CTX_NONE;
 
+#ifdef HAVE_DYNAMIC
 static dylib_t          dll_handle        = NULL; /* Handle to OpenGL32.dll */
+#endif
 
 static gfx_ctx_proc_t gfx_ctx_wgl_get_proc_address(const char *symbol)
 {
@@ -119,7 +121,11 @@ static gfx_ctx_proc_t gfx_ctx_wgl_get_proc_address(const char *symbol)
          break;
    }
 
+#ifdef HAVE_DYNAMIC
    return (gfx_ctx_proc_t)GetProcAddress((HINSTANCE)dll_handle, symbol);
+#else
+   return NULL;
+#endif
 }
 
 #if defined(HAVE_OPENGL)
@@ -411,17 +417,17 @@ static bool gfx_ctx_wgl_set_resize(void *data,
 
 static void gfx_ctx_wgl_update_title(void *data, void *data2)
 {
-   const ui_window_t *window = ui_companion_driver_get_window_ptr();
+   char title[128];
 
-   if (window)
+   title[0] = '\0';
+
+   video_driver_get_window_title(title, sizeof(title));
+
+   if (title[0])
    {
-      char title[128];
+      const ui_window_t *window = ui_companion_driver_get_window_ptr();
 
-      title[0] = '\0';
-
-      video_driver_get_window_title(title, sizeof(title));
-
-      if (title[0])
+      if (window)
          window->set_title(&main_window, title);
    }
 }
@@ -461,7 +467,9 @@ static void *gfx_ctx_wgl_init(video_frame_info_t *video_info, void *video_driver
    if (g_inited)
       return NULL;
 
+#ifdef HAVE_DYNAMIC
    dll_handle = dylib_load("OpenGL32.dll");
+#endif
 
    win32_window_reset();
    win32_monitor_init();
@@ -545,7 +553,9 @@ static void gfx_ctx_wgl_destroy(void *data)
       g_restore_desktop     = false;
    }
 
+#ifdef HAVE_DYNAMIC
    dylib_close(dll_handle);
+#endif
 
    win32_core_hw_context_enable = false;
    g_inited                     = false;
@@ -592,12 +602,12 @@ static void gfx_ctx_wgl_input_driver(void *data,
 
 #if _WIN32_WINNT >= 0x0501
    /* winraw only available since XP */
-   if (string_is_equal_fast(settings->arrays.input_driver, "raw", 4))
+   if (string_is_equal(settings->arrays.input_driver, "raw"))
    {
       *input_data = input_winraw.init(joypad_name);
       if (*input_data)
       {
-         *input = &input_winraw;
+         *input     = &input_winraw;
          dinput_wgl = NULL;
          return;
       }

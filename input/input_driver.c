@@ -71,6 +71,9 @@ static const input_driver_t *input_drivers[] = {
 #if defined(_3DS)
    &input_ctr,
 #endif
+#if defined(SWITCH)
+   &input_switch,
+#endif
 #if defined(HAVE_SDL) || defined(HAVE_SDL2)
    &input_sdl,
 #endif
@@ -143,6 +146,9 @@ static input_device_driver_t *joypad_drivers[] = {
 #ifdef _3DS
    &ctr_joypad,
 #endif
+#ifdef SWITCH
+   &switch_joypad,
+#endif
 #ifdef HAVE_DINPUT
    &dinput_joypad,
 #endif
@@ -170,8 +176,14 @@ static input_device_driver_t *joypad_drivers[] = {
 #ifdef DJGPP
    &dos_joypad,
 #endif
-#ifdef HAVE_HID
+/* Selecting the HID gamepad driver disables the Wii U gamepad. So while
+ * we want the HID code to be compiled & linked, we don't want the driver
+ * to be selectable in the UI. */
+#if defined(HAVE_HID) && !defined(WIIU)
    &hid_joypad,
+#endif
+#ifdef EMSCRIPTEN
+   &rwebpad_joypad,
 #endif
    &null_joypad,
    NULL,
@@ -229,12 +241,14 @@ static const uint8_t buttons[] = {
    RETRO_DEVICE_ID_JOYPAD_B,
 };
 
-
 static uint16_t input_config_vid[MAX_USERS];
 static uint16_t input_config_pid[MAX_USERS];
 
+static char input_device_display_names[MAX_INPUT_DEVICES][64];
+static char input_device_config_names [MAX_INPUT_DEVICES][64];
+char        input_device_names        [MAX_INPUT_DEVICES][64];
+
 uint64_t lifecycle_state;
-char input_device_names[MAX_INPUT_DEVICES][64];
 struct retro_keybind input_config_binds[MAX_USERS][RARCH_BIND_LIST_END];
 struct retro_keybind input_autoconf_binds[MAX_USERS][RARCH_BIND_LIST_END];
 const struct retro_keybind *libretro_input_binds[MAX_USERS];
@@ -303,7 +317,6 @@ const struct input_bind_map input_config_bind_map[RARCH_BIND_LIST_END_NULL] = {
       DECLARE_META_BIND(2, screenshot,            RARCH_SCREENSHOT,            MENU_ENUM_LABEL_VALUE_INPUT_META_SCREENSHOT),
       DECLARE_META_BIND(2, audio_mute,            RARCH_MUTE,                  MENU_ENUM_LABEL_VALUE_INPUT_META_MUTE),
       DECLARE_META_BIND(2, osk_toggle,            RARCH_OSK,                   MENU_ENUM_LABEL_VALUE_INPUT_META_OSK),
-      DECLARE_META_BIND(2, netplay_flip_players_1_2, RARCH_NETPLAY_FLIP,       MENU_ENUM_LABEL_VALUE_INPUT_META_NETPLAY_FLIP),
       DECLARE_META_BIND(2, netplay_game_watch,    RARCH_NETPLAY_GAME_WATCH,    MENU_ENUM_LABEL_VALUE_INPUT_META_NETPLAY_GAME_WATCH),
       DECLARE_META_BIND(2, slowmotion,            RARCH_SLOWMOTION,            MENU_ENUM_LABEL_VALUE_INPUT_META_SLOWMOTION),
       DECLARE_META_BIND(2, enable_hotkey,         RARCH_ENABLE_HOTKEY,         MENU_ENUM_LABEL_VALUE_INPUT_META_ENABLE_HOTKEY),
@@ -366,8 +379,8 @@ static input_remote_t *input_driver_remote        = NULL;
 #ifdef HAVE_KEYMAPPER
 static input_mapper_t *input_driver_mapper        = NULL;
 #endif
-const input_driver_t *current_input               = NULL;
-void *current_input_data                          = NULL;
+static const input_driver_t *current_input        = NULL;
+static void *current_input_data                   = NULL;
 static bool input_driver_block_hotkey             = false;
 static bool input_driver_block_libretro_input     = false;
 static bool input_driver_nonblock_state           = false;
@@ -442,6 +455,11 @@ const char *input_driver_find_ident(int idx)
 const char* config_get_input_driver_options(void)
 {
    return char_list_new_special(STRING_LIST_INPUT_DRIVERS, NULL);
+}
+
+void *input_get_data(void)
+{
+   return current_input_data;
 }
 
 const input_driver_t *input_get_ptr(void)
@@ -555,11 +573,14 @@ void input_poll(void)
    input_driver_turbo_btns.count++;
 
    for (i = 0; i < max_users; i++)
-   {
       input_driver_turbo_btns.frame_enable[i] = 0;
 
-      if (!input_driver_block_libretro_input &&
-            libretro_input_binds[i][RARCH_TURBO_ENABLE].valid)
+   if (input_driver_block_libretro_input)
+      return;
+
+   for (i = 0; i < max_users; i++)
+   {
+      if (libretro_input_binds[i][RARCH_TURBO_ENABLE].valid)
       {
          rarch_joypad_info_t joypad_info;
          joypad_info.axis_threshold = input_driver_axis_threshold;
@@ -571,9 +592,6 @@ void input_poll(void)
                (unsigned)i, RETRO_DEVICE_JOYPAD, 0, RARCH_TURBO_ENABLE);
       }
    }
-
-   if (input_driver_block_libretro_input)
-      return;
 
 #ifdef HAVE_OVERLAY
    if (overlay_ptr && input_overlay_is_alive(overlay_ptr))
@@ -788,7 +806,7 @@ void state_tracker_update_input(uint16_t *input1, uint16_t *input2)
 static INLINE bool input_keys_pressed_iterate(unsigned i,
       retro_bits_t* p_new_state)
 {
-   if ((i >= RARCH_FIRST_META_KEY) && 
+   if ((i >= RARCH_FIRST_META_KEY) &&
          BIT64_GET(lifecycle_state, i)
       )
       return true;
@@ -1017,6 +1035,18 @@ void input_menu_keys_pressed(void *data, retro_bits_t* p_new_state)
 }
 #endif
 
+int16_t input_driver_input_state(
+         rarch_joypad_info_t joypad_info,
+         const struct retro_keybind **retro_keybinds,
+         unsigned port, unsigned device, unsigned index, unsigned id)
+{
+   if (current_input && current_input->input_state)
+      return current_input->input_state(current_input_data, joypad_info,
+            retro_keybinds,
+            port, device, index, id);
+   return 0;
+}
+
 /**
  * input_keys_pressed:
  *
@@ -1109,11 +1139,6 @@ bool input_driver_has_capabilities(void)
    if (!current_input->get_capabilities || !current_input_data)
       return false;
    return true;
-}
-
-void input_driver_poll(void)
-{
-   current_input->poll(current_input_data);
 }
 
 bool input_driver_init(void)
@@ -1820,6 +1845,15 @@ const void *hid_driver_get_data(void)
    return hid_data;
 }
 
+/* This is only to be called after we've invoked free() on the
+ * HID driver; the memory will have already been freed, so we need to
+ * reset the pointer.
+ */
+void hid_driver_reset_data(void)
+{
+   hid_data = NULL;
+}
+
 /**
  * hid_driver_find_ident:
  * @idx                : index of driver to get handle to.
@@ -2316,13 +2350,13 @@ static void parse_hat(struct retro_keybind *bind, const char *str)
       return;
    }
 
-   if      (string_is_equal_fast(dir, "up", 2))
+   if      (string_is_equal(dir, "up"))
       hat_dir = HAT_UP_MASK;
-   else if (string_is_equal_fast(dir, "down", 4))
+   else if (string_is_equal(dir, "down"))
       hat_dir = HAT_DOWN_MASK;
-   else if (string_is_equal_fast(dir, "left", 4))
+   else if (string_is_equal(dir, "left"))
       hat_dir = HAT_LEFT_MASK;
-   else if (string_is_equal_fast(dir, "right", 5))
+   else if (string_is_equal(dir, "right"))
       hat_dir = HAT_RIGHT_MASK;
 
    if (hat_dir)
@@ -2672,6 +2706,20 @@ const char *input_config_get_device_name(unsigned port)
    return input_device_names[port];
 }
 
+const char *input_config_get_device_display_name(unsigned port)
+{
+   if (string_is_empty(input_device_display_names[port]))
+      return NULL;
+   return input_device_display_names[port];
+}
+
+const char *input_config_get_device_config_name(unsigned port)
+{
+   if (string_is_empty(input_device_config_names[port]))
+      return NULL;
+   return input_device_config_names[port];
+}
+
 void input_config_set_device_name(unsigned port, const char *name)
 {
    if (!string_is_empty(name))
@@ -2684,10 +2732,40 @@ void input_config_set_device_name(unsigned port, const char *name)
    }
 }
 
+void input_config_set_device_config_name(unsigned port, const char *name)
+{
+   if (!string_is_empty(name))
+   {
+      strlcpy(input_device_config_names[port],
+            name,
+            sizeof(input_device_config_names[port]));
+   }
+}
+
+void input_config_set_device_display_name(unsigned port, const char *name)
+{
+   if (!string_is_empty(name))
+   {
+      strlcpy(input_device_display_names[port],
+            name,
+            sizeof(input_device_display_names[port]));
+   }
+}
+
 void input_config_clear_device_name(unsigned port)
 {
    input_device_names[port][0] = '\0';
    input_autoconfigure_joypad_reindex_devices();
+}
+
+void input_config_clear_device_display_name(unsigned port)
+{
+   input_device_display_names[port][0] = '\0';
+}
+
+void input_config_clear_device_config_name(unsigned port)
+{
+   input_device_config_names[port][0] = '\0';
 }
 
 unsigned *input_config_get_device_ptr(unsigned port)

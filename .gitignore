@@ -7,7 +7,13 @@
 *.elf
 *.dol
 *.map
+*.swp
+.tmp
+.tmp.c
+.tmp.cxx
 config.log
+/.project
+/.externalToolBuilders/
 /retroarch
 /retroarch.cfg
 /retroarch.exe
@@ -66,7 +72,24 @@ menu/driverspzarch.c
 # Wii U
 *.depend
 *.rpx
+*.last
 wiiu/wut/elf2rpl/elf2rpl
+/pkg/wiiu/retroarch
+/pkg/wiiu/wiiu
+/pkg/wiiu/rpx
+/wiiu-devel.properties
+
+
+# 3ds
+/.lst
+*.3dsx
+*.cia
+*.3ds
+*.bnr
+*.smdh
+/retroarch_3ds.core
+/retroarch_3ds.icn
+/retroarch_3ds_salamander.icn
 
 # Ctags
 /tags
@@ -110,5 +133,15 @@ obj-unix/
 /pkg/msvc/msvc-2010/Release Cg/*.obj
 /pkg/msvc/msvc-2010/Release Cg/*.res
 /pkg/msvc/msvc-2010/Release Cg/*.pdb
-
 retroarch.cfg
+Makefile.local
+
+# Emscripten artifacts
+
+retroarch.js
+retroarch.js.mem
+*.bc
+*.wasm
+
+# only ignore .js files in the repo root
+/*.js

@@ -23,9 +23,9 @@ static void* null_display_server_init(void)
    return NULL;
 }
 
-static void null_display_server_destroy(void)
+static void null_display_server_destroy(void *data)
 {
-
+   (void)data;
 }
 
 static bool null_set_window_opacity(void *data, unsigned opacity)
@@ -35,10 +35,20 @@ static bool null_set_window_opacity(void *data, unsigned opacity)
    return true;
 }
 
+static bool null_set_window_progress(void *data, int progress, bool finished)
+{
+   (void)data;
+   (void)progress;
+   (void)finished;
+   return true;
+}
+
 const video_display_server_t dispserv_null = {
    null_display_server_init,
    null_display_server_destroy,
    null_set_window_opacity,
+   null_set_window_progress,
+   NULL,
    "null"
 };
 

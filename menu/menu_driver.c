@@ -90,6 +90,12 @@ static menu_display_ctx_driver_t *menu_display_ctx_drivers[] = {
 #ifdef HAVE_D3D
    &menu_display_ctx_d3d,
 #endif
+#ifdef HAVE_D3D11
+   &menu_display_ctx_d3d11,
+#endif
+#ifdef HAVE_D3D12
+   &menu_display_ctx_d3d12,
+#endif
 #ifdef HAVE_OPENGL
    &menu_display_ctx_gl,
 #endif
@@ -209,39 +215,49 @@ static bool menu_display_check_compatibility(
       case MENU_VIDEO_DRIVER_GENERIC:
          return true;
       case MENU_VIDEO_DRIVER_OPENGL:
-         if (string_is_equal_fast(video_driver, "gl", 2))
+         if (string_is_equal(video_driver, "gl"))
             return true;
          break;
       case MENU_VIDEO_DRIVER_VULKAN:
-         if (string_is_equal_fast(video_driver, "vulkan", 6))
+         if (string_is_equal(video_driver, "vulkan"))
             return true;
          break;
       case MENU_VIDEO_DRIVER_DIRECT3D:
-         if (string_is_equal_fast(video_driver, "d3d", 3))
+         if (  string_is_equal(video_driver, "d3d9") ||
+               string_is_equal(video_driver, "d3d8")
+               )
+            return true;
+         break;
+      case MENU_VIDEO_DRIVER_DIRECT3D11:
+         if (string_is_equal(video_driver, "d3d11"))
+            return true;
+         break;
+      case MENU_VIDEO_DRIVER_DIRECT3D12:
+         if (string_is_equal(video_driver, "d3d12"))
             return true;
          break;
       case MENU_VIDEO_DRIVER_VITA2D:
-         if (string_is_equal_fast(video_driver, "vita2d", 6))
+         if (string_is_equal(video_driver, "vita2d"))
             return true;
          break;
       case MENU_VIDEO_DRIVER_CTR:
-         if (string_is_equal_fast(video_driver, "ctr", 3))
+         if (string_is_equal(video_driver, "ctr"))
             return true;
          break;
       case MENU_VIDEO_DRIVER_WIIU:
-         if (string_is_equal_fast(video_driver, "gx2", 3))
+         if (string_is_equal(video_driver, "gx2"))
             return true;
          break;
       case MENU_VIDEO_DRIVER_CACA:
-         if (string_is_equal_fast(video_driver, "caca", 4))
+         if (string_is_equal(video_driver, "caca"))
             return true;
          break;
       case MENU_VIDEO_DRIVER_GDI:
-         if (string_is_equal_fast(video_driver, "gdi", 3))
+         if (string_is_equal(video_driver, "gdi"))
             return true;
          break;
       case MENU_VIDEO_DRIVER_VGA:
-         if (string_is_equal_fast(video_driver, "vga", 3))
+         if (string_is_equal(video_driver, "vga"))
             return true;
          break;
    }
@@ -287,17 +303,17 @@ void menu_display_timedate(menu_display_ctx_datetime_t *datetime)
 }
 
 /* Begin blending operation */
-void menu_display_blend_begin(void)
+void menu_display_blend_begin(video_frame_info_t *video_info)
 {
    if (menu_disp && menu_disp->blend_begin)
-      menu_disp->blend_begin();
+      menu_disp->blend_begin(video_info);
 }
 
 /* End blending operation */
-void menu_display_blend_end(void)
+void menu_display_blend_end(video_frame_info_t *video_info)
 {
    if (menu_disp && menu_disp->blend_end)
-      menu_disp->blend_end();
+      menu_disp->blend_end(video_info);
 }
 
 /* Teardown; deinitializes and frees all
@@ -560,13 +576,15 @@ bool menu_display_restore_clear_color(void)
    return true;
 }
 
-void menu_display_clear_color(menu_display_ctx_clearcolor_t *color)
+void menu_display_clear_color(menu_display_ctx_clearcolor_t *color,
+      video_frame_info_t *video_info)
 {
    if (menu_disp && menu_disp->clear_color)
-      menu_disp->clear_color(color);
+      menu_disp->clear_color(color, video_info);
 }
 
-void menu_display_draw(menu_display_ctx_draw_t *draw)
+void menu_display_draw(menu_display_ctx_draw_t *draw,
+      video_frame_info_t *video_info)
 {
    if (!menu_disp || !draw || !menu_disp->draw)
       return;
@@ -575,13 +593,14 @@ void menu_display_draw(menu_display_ctx_draw_t *draw)
    if (draw->height <= 0)
       draw->height = 1;
 
-   menu_disp->draw(draw);
+   menu_disp->draw(draw, video_info);
 }
 
-void menu_display_draw_pipeline(menu_display_ctx_draw_t *draw)
+void menu_display_draw_pipeline(menu_display_ctx_draw_t *draw,
+      video_frame_info_t *video_info)
 {
    if (menu_disp && draw && menu_disp->draw_pipeline)
-      menu_disp->draw_pipeline(draw);
+      menu_disp->draw_pipeline(draw, video_info);
 }
 
 void menu_display_draw_bg(menu_display_ctx_draw_t *draw,
@@ -606,9 +625,11 @@ void menu_display_draw_bg(menu_display_ctx_draw_t *draw,
    coords.vertex        = new_vertex;
    coords.tex_coord     = new_tex_coord;
    coords.lut_tex_coord = new_tex_coord;
-   coords.color         = (const float*)draw->color;
+   coords.color         = (const float*)draw->color;   
 
-   draw->coords      = &coords;
+   draw->coords         = &coords;
+   draw->scale_factor   = 1.0f;
+   draw->rotation       = 0.0f;
 
    if (draw->texture)
       add_opacity_to_wallpaper = true;
@@ -619,7 +640,7 @@ void menu_display_draw_bg(menu_display_ctx_draw_t *draw,
    if (!draw->texture)
       draw->texture     = menu_display_white_texture;
 
-   draw->matrix_data = (math_matrix_4x4*)menu_disp->get_default_mvp();
+   draw->matrix_data = (math_matrix_4x4*)menu_disp->get_default_mvp(video_info);
 }
 
 void menu_display_draw_gradient(menu_display_ctx_draw_t *draw,
@@ -631,10 +652,11 @@ void menu_display_draw_gradient(menu_display_ctx_draw_t *draw,
 
    menu_display_draw_bg(draw, video_info, false,
          video_info->menu_wallpaper_opacity);
-   menu_display_draw(draw);
+   menu_display_draw(draw, video_info);
 }
 
 void menu_display_draw_quad(
+      video_frame_info_t *video_info,
       int x, int y, unsigned w, unsigned h,
       unsigned width, unsigned height,
       float *color)
@@ -649,25 +671,28 @@ void menu_display_draw_quad(
    coords.color         = color;
 
    if (menu_disp && menu_disp->blend_begin)
-      menu_disp->blend_begin();
+      menu_disp->blend_begin(video_info);
 
-   draw.x           = x;
-   draw.y           = (int)height - y - (int)h;
-   draw.width       = w;
-   draw.height      = h;
-   draw.coords      = &coords;
-   draw.matrix_data = NULL;
-   draw.texture     = menu_display_white_texture;
-   draw.prim_type   = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
-   draw.pipeline.id = 0;
+   draw.x            = x;
+   draw.y            = (int)height - y - (int)h;
+   draw.width        = w;
+   draw.height       = h;
+   draw.coords       = &coords;
+   draw.matrix_data  = NULL;
+   draw.texture      = menu_display_white_texture;
+   draw.prim_type    = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
+   draw.pipeline.id  = 0;
+   draw.scale_factor = 1.0f;
+   draw.rotation     = 0.0f;
 
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 
    if (menu_disp && menu_disp->blend_end)
-      menu_disp->blend_end();
+      menu_disp->blend_end(video_info);
 }
 
 void menu_display_draw_texture(
+      video_frame_info_t *video_info,
       int x, int y, unsigned w, unsigned h,
       unsigned width, unsigned height,
       float *color, uintptr_t texture)
@@ -694,18 +719,19 @@ void menu_display_draw_texture(
    draw.pipeline.id         = 0;
    coords.color             = (const float*)color;
 
-   menu_display_rotate_z(&rotate_draw);
+   menu_display_rotate_z(&rotate_draw, video_info);
 
    draw.texture             = texture;
    draw.x                   = x;
    draw.y                   = height - y;
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 }
 
 /* Draw the texture split into 9 sections, without scaling the corners.
  * The middle sections will only scale in the X axis, and the side
  * sections will only scale in the Y axis. */
 void menu_display_draw_texture_slice(
+      video_frame_info_t *video_info,
       int x, int y, unsigned w, unsigned h,
       unsigned new_w, unsigned new_h,
       unsigned width, unsigned height,
@@ -780,7 +806,7 @@ void menu_display_draw_texture_slice(
    draw.pipeline.id         = 0;
    coords.color             = (const float*)colors;
 
-   menu_display_rotate_z(&rotate_draw);
+   menu_display_rotate_z(&rotate_draw, video_info);
 
    draw.texture             = texture;
    draw.x                   = 0;
@@ -811,7 +837,7 @@ void menu_display_draw_texture_slice(
    tex_coord[6] = T_TR[0];
    tex_coord[7] = T_TR[1];
 
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 
    /* top-middle section */
    vert_coord[0] = V_BL[0] + vert_woff;
@@ -832,7 +858,7 @@ void menu_display_draw_texture_slice(
    tex_coord[6] = T_TR[0] + tex_mid_width;
    tex_coord[7] = T_TR[1];
 
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 
    /* top-right corner */
    vert_coord[0] = V_BL[0] + vert_woff + vert_scaled_mid_width;
@@ -853,7 +879,7 @@ void menu_display_draw_texture_slice(
    tex_coord[6] = T_TR[0] + tex_mid_width + tex_woff;
    tex_coord[7] = T_TR[1];
 
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 
    /* middle-left section */
    vert_coord[0] = V_BL[0];
@@ -874,7 +900,7 @@ void menu_display_draw_texture_slice(
    tex_coord[6] = T_TR[0];
    tex_coord[7] = T_TR[1] + tex_hoff;
 
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 
    /* center section */
    vert_coord[0] = V_BL[0] + vert_woff;
@@ -895,7 +921,7 @@ void menu_display_draw_texture_slice(
    tex_coord[6] = T_TR[0] + tex_mid_width;
    tex_coord[7] = T_TR[1] + tex_hoff;
 
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 
    /* middle-right section */
    vert_coord[0] = V_BL[0] + vert_woff + vert_scaled_mid_width;
@@ -916,7 +942,7 @@ void menu_display_draw_texture_slice(
    tex_coord[6] = T_TR[0] + tex_woff + tex_mid_width;
    tex_coord[7] = T_TR[1] + tex_hoff;
 
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 
    /* bottom-left corner */
    vert_coord[0] = V_BL[0];
@@ -937,7 +963,7 @@ void menu_display_draw_texture_slice(
    tex_coord[6] = T_TR[0];
    tex_coord[7] = T_TR[1] + tex_hoff + tex_mid_height;
 
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 
    /* bottom-middle section */
    vert_coord[0] = V_BL[0] + vert_woff;
@@ -958,7 +984,7 @@ void menu_display_draw_texture_slice(
    tex_coord[6] = T_TR[0] + tex_mid_width;
    tex_coord[7] = T_TR[1] + tex_mid_height;
 
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 
    /* bottom-right corner */
    vert_coord[0] = V_BL[0] + vert_woff + vert_scaled_mid_width;
@@ -979,14 +1005,15 @@ void menu_display_draw_texture_slice(
    tex_coord[6] = T_TR[0] + tex_woff + tex_mid_width;
    tex_coord[7] = T_TR[1] + tex_hoff + tex_mid_height;
 
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 
    free(colors);
    free(vert_coord);
    free(tex_coord);
 }
 
-void menu_display_rotate_z(menu_display_ctx_rotate_draw_t *draw)
+void menu_display_rotate_z(menu_display_ctx_rotate_draw_t *draw,
+      video_frame_info_t *video_info)
 {
 #if !defined(VITA) && !defined(_3DS) && !defined(WIIU)
    math_matrix_4x4 matrix_rotated, matrix_scaled;
@@ -995,7 +1022,7 @@ void menu_display_rotate_z(menu_display_ctx_rotate_draw_t *draw)
    if (!draw || !menu_disp || !menu_disp->get_default_mvp)
       return;
 
-   b = (math_matrix_4x4*)menu_disp->get_default_mvp();
+   b = (math_matrix_4x4*)menu_disp->get_default_mvp(video_info);
 
    if (!b)
       return;
@@ -1094,6 +1121,7 @@ void menu_display_allocate_white_texture(void)
  * Draw a hardware cursor on top of the screen for the mouse.
  */
 void menu_display_draw_cursor(
+      video_frame_info_t *video_info,
       float *color, float cursor_size, uintptr_t texture,
       float x, float y, unsigned width, unsigned height)
 {
@@ -1113,7 +1141,7 @@ void menu_display_draw_cursor(
    coords.color         = (const float*)color;
 
    if (menu_disp && menu_disp->blend_begin)
-      menu_disp->blend_begin();
+      menu_disp->blend_begin(video_info);
 
    draw.x               = x - (cursor_size / 2);
    draw.y               = (int)height - y - (cursor_size / 2);
@@ -1123,11 +1151,12 @@ void menu_display_draw_cursor(
    draw.matrix_data     = NULL;
    draw.texture         = texture;
    draw.prim_type       = MENU_DISPLAY_PRIM_TRIANGLESTRIP;
+   draw.pipeline.id     = 0;
 
-   menu_display_draw(&draw);
+   menu_display_draw(&draw, video_info);
 
    if (menu_disp && menu_disp->blend_end)
-      menu_disp->blend_end();
+      menu_disp->blend_end(video_info);
 }
 
 static INLINE float menu_display_scalef(float val,
@@ -1295,34 +1324,25 @@ void menu_display_reset_textures_list(
       uintptr_t *item, enum texture_filter_type filter_type)
 {
    struct texture_image ti;
-   char *texpath               = (char*)malloc(PATH_MAX_LENGTH * sizeof(char));
-   size_t texpath_size         = PATH_MAX_LENGTH * sizeof(char);
+   char texpath[PATH_MAX_LENGTH] = {0};
 
-   texpath[0]                  = '\0';
-
-   ti.width                    = 0;
-   ti.height                   = 0;
-   ti.pixels                   = NULL;
-   ti.supports_rgba            = video_driver_supports_rgba();
+   ti.width                      = 0;
+   ti.height                     = 0;
+   ti.pixels                     = NULL;
+   ti.supports_rgba              = video_driver_supports_rgba();
 
    if (!string_is_empty(texture_path))
-      fill_pathname_join(texpath, iconpath, texture_path, texpath_size);
+      fill_pathname_join(texpath, iconpath, texture_path, sizeof(texpath));
 
    if (string_is_empty(texpath) || !filestream_exists(texpath))
-      goto error;
+      return;
 
    if (!image_texture_load(&ti, texpath))
-      goto error;
+      return;
 
    video_driver_texture_load(&ti,
          filter_type, item);
    image_texture_free(&ti);
-
-   free(texpath);
-   return;
-
-error:
-   free(texpath);
 }
 
 bool menu_driver_is_binding_state(void)
@@ -1847,13 +1867,16 @@ bool menu_driver_ctl(enum rarch_menu_ctl_state state, void *data)
                   menu_driver_find_handle(i);
             else
             {
-               unsigned d;
-               RARCH_WARN("Couldn't find any menu driver named \"%s\"\n",
-                     settings->arrays.menu_driver);
-               RARCH_LOG_OUTPUT("Available menu drivers are:\n");
-               for (d = 0; menu_driver_find_handle(d); d++)
-                  RARCH_LOG_OUTPUT("\t%s\n", menu_driver_find_ident(d));
-               RARCH_WARN("Going to default to first menu driver...\n");
+               if (verbosity_is_enabled())
+               {
+                  unsigned d;
+                  RARCH_WARN("Couldn't find any menu driver named \"%s\"\n",
+                        settings->arrays.menu_driver);
+                  RARCH_LOG_OUTPUT("Available menu drivers are:\n");
+                  for (d = 0; menu_driver_find_handle(d); d++)
+                     RARCH_LOG_OUTPUT("\t%s\n", menu_driver_find_ident(d));
+                  RARCH_WARN("Going to default to first menu driver...\n");
+               }
 
                menu_driver_ctx = (const menu_ctx_driver_t*)
                   menu_driver_find_handle(0);

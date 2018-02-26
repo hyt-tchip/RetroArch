@@ -25,30 +25,30 @@
 
 #include "../menu_driver.h"
 
-static void *menu_display_vga_get_default_mvp(void)
+static void *menu_display_vga_get_default_mvp(video_frame_info_t *video_info)
 {
    return NULL;
 }
 
-static void menu_display_vga_blend_begin(void)
+static void menu_display_vga_blend_begin(video_frame_info_t *video_info)
 {
 }
 
-static void menu_display_vga_blend_end(void)
+static void menu_display_vga_blend_end(video_frame_info_t *video_info)
 {
 }
 
-static void menu_display_vga_draw(void *data)
-{
-   (void)data;
-}
-
-static void menu_display_vga_draw_pipeline(void *data)
+static void menu_display_vga_draw(void *data, video_frame_info_t *video_info)
 {
    (void)data;
 }
 
-static void menu_display_vga_viewport(void *data)
+static void menu_display_vga_draw_pipeline(void *data, video_frame_info_t *video_info)
+{
+   (void)data;
+}
+
+static void menu_display_vga_viewport(void *data, video_frame_info_t *video_info)
 {
    (void)data;
 }
@@ -57,7 +57,9 @@ static void menu_display_vga_restore_clear_color(void)
 {
 }
 
-static void menu_display_vga_clear_color(menu_display_ctx_clearcolor_t *clearcolor)
+static void menu_display_vga_clear_color(
+      menu_display_ctx_clearcolor_t *clearcolor,
+      video_frame_info_t *video_info)
 {
    (void)clearcolor;
 }

@@ -23,6 +23,7 @@
 
 #include <boolean.h>
 #include <audio/audio_mixer.h>
+#include <audio/audio_resampler.h>
 #include <retro_common_api.h>
 
 RETRO_BEGIN_DECLS
@@ -255,6 +256,8 @@ bool audio_driver_init(void);
 
 bool audio_driver_mixer_add_stream(audio_mixer_stream_params_t *params);
 
+enum resampler_quality audio_driver_get_resampler_quality(void);
+
 extern audio_driver_t audio_rsound;
 extern audio_driver_t audio_oss;
 extern audio_driver_t audio_alsa;
@@ -277,6 +280,7 @@ extern audio_driver_t audio_ax;
 extern audio_driver_t audio_psp;
 extern audio_driver_t audio_ctr_csnd;
 extern audio_driver_t audio_ctr_dsp;
+extern audio_driver_t audio_switch;
 extern audio_driver_t audio_rwebaudio;
 extern audio_driver_t audio_null;
 

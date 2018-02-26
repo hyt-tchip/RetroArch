@@ -79,9 +79,15 @@
 #include <wiiu/os/time.h>
 #endif
 
+#ifdef SWITCH
+#include <libtransistor/types.h>
+#include <libtransistor/svc.h>
+#endif
+
 #if defined(_3DS)
 #include <3ds/svc.h>
 #include <3ds/os.h>
+#include <3ds/services/cfgu.h>
 #endif
 
 /* iOS/OSX specific. Lacks clock_gettime(), so implement it. */
@@ -230,12 +236,14 @@ retro_time_t cpu_features_get_time_usec(void)
    return sceKernelGetProcessTimeWide();
 #elif defined(WIIU)
    return ticks_to_us(OSGetSystemTime());
+#elif defined(SWITCH)
+   return (svcGetSystemTick() * 10) / 192;
 #else
 #error "Your platform does not have a timer function implemented in cpu_features_get_time_usec(). Cannot continue."
 #endif
 }
 
-#if defined(__x86_64__) || defined(__i386__) || defined(__i486__) || defined(__i686__)
+#if defined(__x86_64__) || defined(__i386__) || defined(__i486__) || defined(__i686__) || (defined(_M_X64) && _MSC_VER > 1310) || (defined(_M_IX86)  && _MSC_VER > 1310)
 #define CPU_X86
 #endif
 
@@ -474,6 +482,26 @@ unsigned cpu_features_get_core_amount(void)
 #elif defined(VITA)
    return 4;
 #elif defined(_3DS)
+   u8 device_model = 0xFF;
+   CFGU_GetSystemModel(&device_model);/*(0 = O3DS, 1 = O3DSXL, 2 = N3DS, 3 = 2DS, 4 = N3DSXL, 5 = N2DSXL)*/
+   switch (device_model)
+   {
+		case 0:
+		case 1:
+		case 3:
+			/*Old 3/2DS*/
+			return 2;
+	   
+		case 2:
+		case 4:
+		case 5:
+			/*New 3/2DS*/
+			return 4;
+	   
+		default:
+			/*Unknown Device Or Check Failed*/
+			break;
+   }
    return 1;
 #elif defined(WIIU)
    return 3;
@@ -621,6 +649,10 @@ uint64_t cpu_features_get(void)
    if (sysctlbyname("hw.optional.neon", NULL, &len, NULL, 0) == 0)
       cpu |= RETRO_SIMD_NEON;
 
+#elif defined(_XBOX1)
+   cpu |= RETRO_SIMD_MMX;
+   cpu |= RETRO_SIMD_SSE;
+   cpu |= RETRO_SIMD_MMXEXT;
 #elif defined(CPU_X86)
    (void)avx_flags;
 

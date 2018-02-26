@@ -21,7 +21,6 @@
 #include <lists/string_list.h>
 #include <audio/conversion/float_to_s16.h>
 #include <audio/conversion/s16_to_float.h>
-#include <audio/audio_resampler.h>
 #include <audio/dsp_filter.h>
 #include <file/file_path.h>
 #include <lists/dir_list.h>
@@ -116,6 +115,9 @@ static const audio_driver_t *audio_drivers[] = {
    &audio_ctr_csnd,
    &audio_ctr_dsp,
 #endif
+#ifdef SWITCH
+   &audio_switch,
+#endif
    &audio_null,
    NULL,
 };
@@ -144,8 +146,10 @@ static size_t audio_driver_rewind_size                   = 0;
 static int16_t *audio_driver_rewind_buf                  = NULL;
 static int16_t *audio_driver_output_samples_conv_buf     = NULL;
 
+#ifdef DEBUG
 static unsigned audio_driver_free_samples_buf[AUDIO_BUFFER_FREE_SAMPLES_COUNT];
 static uint64_t audio_driver_free_samples_count          = 0;
+#endif
 
 static size_t audio_driver_buffer_size                   = 0;
 static size_t audio_driver_data_ptr                      = 0;
@@ -179,6 +183,17 @@ static void *audio_driver_resampler_data                 = NULL;
 static const audio_driver_t *current_audio               = NULL;
 static void *audio_driver_context_audio_data             = NULL;
 
+enum resampler_quality audio_driver_get_resampler_quality(void)
+{
+   settings_t *settings = config_get_ptr();
+
+   if (!settings)
+      return RESAMPLER_QUALITY_DONTCARE;
+
+   return (enum resampler_quality)settings->uints.audio_resampler_quality;
+}
+
+#ifdef DEBUG
 /**
  * compute_audio_buffer_statistics:
  *
@@ -212,13 +227,22 @@ static void compute_audio_buffer_statistics(void)
       accum_var += diff * diff;
    }
 
-#if defined(_MSC_VER) && _MSC_VER <= 1200
+#ifdef WARPUP
+   /* uint64 to double not implemented, fair chance signed int64 to double doesn't exist either */
+   /* https://forums.libretro.com/t/unsupported-platform-help/13903/ */
+   (void)stddev; (void)avg_filled; (void)deviation;
+#elif defined(_MSC_VER) && _MSC_VER <= 1200
    /* FIXME: error C2520: conversion from unsigned __int64 to double not implemented, use signed __int64 */
+   (void)stddev; (void)avg_filled; (void)deviation;
 #else
    stddev          = (unsigned)sqrt((double)accum_var / (samples - 2));
    avg_filled      = 1.0f - (float)avg / audio_driver_buffer_size;
    deviation       = (float)stddev / audio_driver_buffer_size;
+
+   RARCH_LOG("[Audio]: Average audio buffer saturation: %.2f %%, standard deviation (percentage points): %.2f %%.\n",
+         avg_filled * 100.0, deviation * 100.0);
 #endif
+
    low_water_size  = (unsigned)(audio_driver_buffer_size * 3 / 4);
    high_water_size = (unsigned)(audio_driver_buffer_size     / 4);
 
@@ -230,12 +254,11 @@ static void compute_audio_buffer_statistics(void)
          high_water_count++;
    }
 
-   RARCH_LOG("[Audio]: Average audio buffer saturation: %.2f %%, standard deviation (percentage points): %.2f %%.\n",
-         avg_filled * 100.0, deviation * 100.0);
    RARCH_LOG("[Audio]: Amount of time spent close to underrun: %.2f %%. Close to blocking: %.2f %%.\n",
          (100.0 * low_water_count) / (samples - 1),
          (100.0 * high_water_count) / (samples - 1));
 }
+#endif
 
 /**
  * audio_driver_find_handle:
@@ -320,7 +343,9 @@ static bool audio_driver_deinit_internal(void)
 
    command_event(CMD_EVENT_DSP_FILTER_DEINIT, NULL);
 
+#ifdef DEBUG
    compute_audio_buffer_statistics();
+#endif
 
    return true;
 }
@@ -439,6 +464,7 @@ static bool audio_driver_init_internal(bool audio_cb_inited)
             &audio_driver_resampler_data,
             &audio_driver_resampler,
             settings->arrays.audio_resampler,
+            audio_driver_get_resampler_quality(),
             audio_source_ratio_original))
    {
       RARCH_ERR("Failed to initialize resampler \"%s\".\n",
@@ -488,7 +514,9 @@ static bool audio_driver_init_internal(bool audio_cb_inited)
 
    command_event(CMD_EVENT_DSP_FILTER_INIT, NULL);
 
+#ifdef DEBUG
    audio_driver_free_samples_count = 0;
+#endif
 
    audio_mixer_init(settings->uints.audio_out_rate);
 
@@ -528,11 +556,8 @@ void audio_driver_set_nonblocking_state(bool enable)
  *
  * Writes audio samples to audio driver. Will first
  * perform DSP processing (if enabled) and resampling.
- *
- * Returns: true (1) if audio samples were written to the audio
- * driver, false (0) in case of an error.
  **/
-static bool audio_driver_flush(const int16_t *data, size_t samples)
+static void audio_driver_flush(const int16_t *data, size_t samples)
 {
    struct resampler_data src_data;
    bool is_perfcnt_enable                               = false;
@@ -556,10 +581,11 @@ static bool audio_driver_flush(const int16_t *data, size_t samples)
    runloop_get_status(&is_paused, &is_idle, &is_slowmotion,
          &is_perfcnt_enable);
 
-   if (is_paused)
-      return true;
-   if (!audio_driver_active || !audio_driver_input_data)
-      return false;
+   if (            is_paused                || 
+		   !audio_driver_active     || 
+		   !audio_driver_input_data ||
+		   !audio_driver_output_samples_buf)
+      return;
 
    convert_s16_to_float(audio_driver_input_data, data, samples,
          audio_volume_gain);
@@ -594,29 +620,31 @@ static bool audio_driver_flush(const int16_t *data, size_t samples)
    if (audio_driver_control)
    {
       /* Readjust the audio input rate. */
-      unsigned write_idx   = audio_driver_free_samples_count++ &
-         (AUDIO_BUFFER_FREE_SAMPLES_COUNT - 1);
       int      half_size   = (int)(audio_driver_buffer_size / 2);
       int      avail       =
          (int)current_audio->write_avail(audio_driver_context_audio_data);
       int      delta_mid   = avail - half_size;
       double   direction   = (double)delta_mid / half_size;
       double   adjust      = 1.0 + audio_driver_rate_control_delta * direction;
-
-#if 0
-      RARCH_LOG_OUTPUT("[Audio]: Audio buffer is %u%% full\n",
-            (unsigned)(100 - (avail * 100) / audio_driver_buffer_size));
-#endif
+#ifdef DEBUG
+      unsigned write_idx   = audio_driver_free_samples_count++ &
+         (AUDIO_BUFFER_FREE_SAMPLES_COUNT - 1);
 
       audio_driver_free_samples_buf
          [write_idx]               = avail;
+#endif
       audio_source_ratio_current   =
          audio_source_ratio_original * adjust;
 
 #if 0
-      RARCH_LOG_OUTPUT("[Audio]: New rate: %lf, Orig rate: %lf\n",
-            audio_source_ratio_current,
-            audio_source_ratio_original);
+      if (verbosity_is_enabled())
+      {
+         RARCH_LOG_OUTPUT("[Audio]: Audio buffer is %u%% full\n",
+               (unsigned)(100 - (avail * 100) / audio_driver_buffer_size));
+         RARCH_LOG_OUTPUT("[Audio]: New rate: %lf, Orig rate: %lf\n",
+               audio_source_ratio_current,
+               audio_source_ratio_original);
+      }
 #endif
    }
 
@@ -656,12 +684,7 @@ static bool audio_driver_flush(const int16_t *data, size_t samples)
 
    if (current_audio->write(audio_driver_context_audio_data,
             output_data, output_frames * 2) < 0)
-   {
       audio_driver_active = false;
-      return false;
-   }
-
-   return true;
 }
 
 /**
@@ -852,13 +875,16 @@ bool audio_driver_find_driver(void)
       current_audio = (const audio_driver_t*)audio_driver_find_handle(i);
    else
    {
-      unsigned d;
-      RARCH_ERR("Couldn't find any audio driver named \"%s\"\n",
-            settings->arrays.audio_driver);
-      RARCH_LOG_OUTPUT("Available audio drivers are:\n");
-      for (d = 0; audio_driver_find_handle(d); d++)
-         RARCH_LOG_OUTPUT("\t%s\n", audio_driver_find_ident(d));
-      RARCH_WARN("Going to default to first audio driver...\n");
+      if (verbosity_is_enabled())
+      {
+         unsigned d;
+         RARCH_ERR("Couldn't find any audio driver named \"%s\"\n",
+               settings->arrays.audio_driver);
+         RARCH_LOG_OUTPUT("Available audio drivers are:\n");
+         for (d = 0; audio_driver_find_handle(d); d++)
+            RARCH_LOG_OUTPUT("\t%s\n", audio_driver_find_ident(d));
+         RARCH_WARN("Going to default to first audio driver...\n");
+      }
 
       current_audio = (const audio_driver_t*)audio_driver_find_handle(0);
 

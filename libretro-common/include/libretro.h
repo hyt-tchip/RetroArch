@@ -32,7 +32,7 @@ extern "C" {
 #endif
 
 #ifndef __cplusplus
-#if defined(_MSC_VER) && !defined(SN_TARGET_PS3)
+#if defined(_MSC_VER) && _MSC_VER < 1800 && !defined(SN_TARGET_PS3)
 /* Hack applied for MSVC when compiling in C89 mode
  * as it isn't C99-compliant. */
 #define bool unsigned char
@@ -270,6 +270,7 @@ enum retro_language
    RETRO_LANGUAGE_ESPERANTO           = 13,
    RETRO_LANGUAGE_POLISH              = 14,
    RETRO_LANGUAGE_VIETNAMESE          = 15,
+   RETRO_LANGUAGE_ARABIC              = 16,
    RETRO_LANGUAGE_LAST,
 
    /* Ensure sizeof(enum) == sizeof(int) */
@@ -375,6 +376,10 @@ enum retro_key
    RETROK_x              = 120,
    RETROK_y              = 121,
    RETROK_z              = 122,
+   RETROK_LEFTBRACE      = 123,
+   RETROK_BAR            = 124,
+   RETROK_RIGHTBRACE     = 125,
+   RETROK_TILDE          = 126,
    RETROK_DELETE         = 127,
 
    RETROK_KP0            = 256,
@@ -1094,6 +1099,21 @@ struct retro_hw_render_interface
    enum retro_hw_render_interface_type interface_type;
    unsigned interface_version;
 };
+
+
+#define RETRO_ENVIRONMENT_GET_LED_INTERFACE (46 | RETRO_ENVIRONMENT_EXPERIMENTAL)
+                                           /* struct retro_led_interface * --
+                                            * Gets an interface which is used by a libretro core to set 
+                                            * state of LEDs.
+                                            */
+
+typedef void (RETRO_CALLCONV *retro_set_led_state_t)(int led, int state);
+struct retro_led_interface
+{
+    retro_set_led_state_t set_led_state;
+};
+
+
 #define RETRO_ENVIRONMENT_GET_HW_RENDER_INTERFACE (41 | RETRO_ENVIRONMENT_EXPERIMENTAL)
                                            /* const struct retro_hw_render_interface ** --
                                             * Returns an API specific rendering interface for accessing API specific data.

@@ -143,7 +143,7 @@ void path_set_redirect(void)
       }
    }
 
-   /* Set savefile directory if empty based on content directory */
+   /* Set savefile directory if empty to content directory */
    if (string_is_empty(new_savefile_dir) || settings->bools.savefiles_in_content_dir)
    {
       strlcpy(new_savefile_dir, path_main_basename,
@@ -297,7 +297,6 @@ static bool path_init_subsystem(void)
 
    if (!system || path_is_empty(RARCH_PATH_SUBSYSTEM))
       return false;
-
    /* For subsystems, we know exactly which RAM types are supported. */
 
    info = libretro_find_subsystem_info(
@@ -306,7 +305,6 @@ static bool path_init_subsystem(void)
          path_get(RARCH_PATH_SUBSYSTEM));
 
    /* We'll handle this error gracefully later. */
-
    if (info)
    {
       unsigned num_content = MIN(info->num_roms,
@@ -319,6 +317,7 @@ static bool path_init_subsystem(void)
          {
             union string_list_elem_attr attr;
             char ext[32];
+            char savename[PATH_MAX_LENGTH];
             size_t path_size = PATH_MAX_LENGTH * sizeof(char);
             char *path       = (char*)malloc(
                   PATH_MAX_LENGTH * sizeof(char));
@@ -329,19 +328,21 @@ static bool path_init_subsystem(void)
             path[0] = ext[0] = '\0';
 
             snprintf(ext, sizeof(ext), ".%s", mem->extension);
+            strlcpy(savename, subsystem_fullpaths->elems[i].data, sizeof(savename));
+            path_remove_extension(savename);
 
-            if (path_is_directory(dir_get(RARCH_DIR_SAVEFILE)))
+            if (path_is_directory(dir_get(RARCH_DIR_CURRENT_SAVEFILE)))
             {
                /* Use SRAM dir */
                /* Redirect content fullpath to save directory. */
-               strlcpy(path, dir_get(RARCH_DIR_SAVEFILE), path_size);
+               strlcpy(path, dir_get(RARCH_DIR_CURRENT_SAVEFILE), path_size);
                fill_pathname_dir(path,
-                     subsystem_fullpaths->elems[i].data, ext,
+                     savename, ext,
                      path_size);
             }
             else
             {
-               fill_pathname(path, subsystem_fullpaths->elems[i].data,
+               fill_pathname(path, savename,
                      ext, path_size);
             }
 

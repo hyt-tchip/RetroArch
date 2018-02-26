@@ -173,14 +173,15 @@ static void xshm_poke_apply_state_changes(void *data)
 
 }
 
-#ifdef HAVE_MENU
-static void xshm_poke_set_texture_frame(void *data, const void *frame, bool rgb32,
+static void xshm_poke_set_texture_frame(void *data,
+      const void *frame, bool rgb32,
       unsigned width, unsigned height, float alpha)
 {
 
 }
 
-static void xshm_poke_texture_enable(void *data, bool enable, bool full_screen)
+static void xshm_poke_texture_enable(void *data,
+      bool enable, bool full_screen)
 {
 
 }
@@ -190,7 +191,6 @@ static void xshm_poke_set_osd_msg(void *data,
       const char *msg,
       const struct font_params *params, void *font)
 {
-
 }
 
 static void xshm_show_mouse(void *data, bool state)
@@ -202,7 +202,6 @@ static void xshm_grab_mouse_toggle(void *data)
 {
 
 }
-#endif
 
 static video_poke_interface_t xshm_video_poke_interface = {
    NULL,       /* set_coords */
@@ -218,20 +217,14 @@ static video_poke_interface_t xshm_video_poke_interface = {
    NULL, /* get_proc_address */
    xshm_poke_set_aspect_ratio,
    xshm_poke_apply_state_changes,
-#ifdef HAVE_MENU
    xshm_poke_set_texture_frame,
    xshm_poke_texture_enable,
    xshm_poke_set_osd_msg,
    xshm_show_mouse,
    xshm_grab_mouse_toggle,
-#else
-   NULL,
-   NULL,
-   NULL,
-   NULL,
-   NULL,
-#endif
-   NULL,
+   NULL,                   /* get_current_shader */
+   NULL,                   /* get_current_software_framebuffer */
+   NULL                    /* get_hw_render_interface */
 };
 
 static void xshm_gfx_poke_interface(void *data, const video_poke_interface_t **iface)
